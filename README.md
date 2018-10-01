@@ -1,4 +1,4 @@
-# phmd: First-Principles Anharmonic Free Energy of Complex Crystals from Phonon Quasiparticle
+# phmd: Temperature Dependent Phonon Quasiparticle Dispersions of Complex Crystals from First Principles
 
 [TOC]
 
