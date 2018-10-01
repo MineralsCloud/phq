@@ -61,7 +61,7 @@ The output `dynmatmd` files from phmd can be read in by the q2r.x executable in 
 
 ## Example
 
-There is an example of diamond silicon in the example folder.
+There is an example of diamond silicon in the `examples` folder.
 
 ## License
 
