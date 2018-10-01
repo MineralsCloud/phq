@@ -1,0 +1,20 @@
+NAME = phmd
+
+FC = gfortran
+
+OFILES = configure.o main.o phmd.o
+
+${NAME} : ${OFILES}
+	${FC} -o ${NAME} ${OFILES} ${LIB}
+
+clean :
+	rm -f *.o *.mod ${NAME}
+
+configure.o : configure.f90
+	${FC} -c $<
+
+main.o : main.f90 
+	${FC} -c $<
+
+phmd.o : phmd.f90 
+	${FC} -c $<
