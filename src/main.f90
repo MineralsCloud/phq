@@ -2089,14 +2089,14 @@ subroutine maximum_entropy ( debug, velocity )
 
      evlmem_mode =  evlmem (:,j)
 
-    call lorentzian ( debug, evlmem_mode, location_mem, d_omega_mem,     &
-                         lorentzian_max, half_width, p_con )
+    ! call lorentzian ( debug, evlmem_mode, location_mem, d_omega_mem,     &
+                         ! lorentzian_max, half_width, p_con )
 
      omega_mem ( j ) = d_omega_mem * DBLE( location_mem )                 &
                          * thz_to_cm/thertz/two/pi/atu
 
-     omega_lorentzian ( j ) = d_omega_mem * DBLE( lorentzian_max )          &
-                         * thz_to_cm/thertz/two/pi/atu
+     ! omega_lorentzian ( j ) = d_omega_mem * DBLE( lorentzian_max )          &
+                         ! * thz_to_cm/thertz/two/pi/atu
   
   end do
 
