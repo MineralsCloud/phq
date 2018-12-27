@@ -1,8 +1,8 @@
-NAME = phmd.exe
+NAME = phq.exe
 
 FC = ifort
 
-OFILES = configure.o main.o phmd.o
+OFILES = configure.o main.o phq.o
 
 ${NAME} : ${OFILES}
 	${FC} -o ${NAME} ${OFILES} ${LIB}
@@ -16,5 +16,5 @@ configure.o : configure.f90
 main.o : main.f90 
 	${FC} -c $<
 
-phmd.o : phmd.f90 
+phq.o : phq.f90 
 	${FC} -c $<
