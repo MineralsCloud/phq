@@ -1,11 +1,11 @@
 !**************************************************************************
-program phmd    
+program phq    
 !**************************************************************************
 !
-!     Program:     phmd
+!     Program:     phq
 !                       
-!     Purpose:     This program performs anharmonic phonon calculations from 
-!                  harmonic phonon calculations and molecular dynamics calculations.
+!     Purpose:     This program performs phonon quasiparticle calculations from 
+!                  harmonic phonon calculations and molecular dynamics simulations.
 !                                              
 !**************************************************************************
 !  used modules
@@ -23,33 +23,27 @@ program phmd
 
    logical :: debug
 
-   integer       :: value1(8)
-   integer       :: value2(8)
-
    character*8   :: date
    character*10  :: time
    character*5   :: zone
-
-
    character ( len = 80 ) :: line
    character ( len = 30 ), dimension ( 10 ) :: words
-   character ( len = 30 ), dimension ( 8 ), parameter ::                 &
+   character ( len = 30 ), dimension ( 7 ), parameter ::                 &
        command = (/                             &
        'dt                            ',     & ! 1
-       'pole                          ',     & ! 2
-       'step_md_use                   ',     & ! 3
-       'correlation_time              ',     & ! 4
-       'window_time                   ',     & ! 5
-       'block                         ',     & ! 6
-       'supercell                     ',     & ! 7
-       'temperature                   '/)      ! 8
+       'step_md_use                   ',     & ! 2
+       'correlation_time              ',     & ! 3
+       'pole                          ',     & ! 4
+       'supercell                     ',     & ! 5
+       'temperature                   ',     & ! 6
+       'method                        '/)      ! 7
 
-  integer :: i, j, n, n_line, status
-  
+  integer       :: value1(8)
+  integer       :: value2(8)
+  integer :: i, j, n, n_line, status  
   integer :: n_integers
   integer :: n_words
-  integer :: n_reals
-  
+  integer :: n_reals  
   integer :: integer_numbers(10)
   
   double precision :: real_numbers(10)
@@ -86,23 +80,19 @@ program phmd
            d_t = real_numbers (1)  
 
       else if (words(1) == command(2) )  then
-    
-           pole = integer_numbers (1) 
-
-      else if (words(1) == command(3) )  then
 
            n_step_use = integer_numbers (1)
 
-      else if (words(1) == command(4) )  then
+      else if (words(1) == command(3) )  then
 
            n_corr =  integer_numbers (1)
            n_window = n_corr
 
-      else if (words(1) == command(6) )  then
+      else if (words(1) == command(4) )  then
+    
+           pole = integer_numbers (1) 
 
-           block = integer_numbers (1)
-
-      else if (words(1) == command(7) )  then
+      else if (words(1) == command(5) )  then
 
            super(1) = integer_numbers (1)
            super(2) = integer_numbers (2)
@@ -110,13 +100,15 @@ program phmd
 
            super_size = super(1) * super(2) * super(3)
 
-           allocate( r_point (super_size,3) )
-           allocate( q_point (super_size,3) )
-           allocate( real_point (super_size,3) )
-           allocate( recip_point (super_size,3) )
+           allocate( r_point (super_size,3) )   ! in cartesian coordinate
+           allocate( q_point (super_size,3) )   ! in cartesian coordinate
 
-      else if (words(1) == command(8) )  then
+      else if (words(1) == command(6) )  then
            temperaturemd = real_numbers (1)
+
+      else if (words(1) == command(7) )  then
+           method = integer_numbers (1)
+
       end if
 
    end do
@@ -124,22 +116,18 @@ program phmd
 !
 !  end of reading input
 !
-
+   write (6,*) "Reading input"
    write (6,*) "dt= ", d_t 
-
 
    call control ( debug )
  
    call DATE_AND_TIME(date, time, zone, value2)
-   write(6,*) "simulation time =", value2(5)-value1(5), "H",         &
-                                    value2(6)-value1(6), "M",         &
-                                    value2(5)-value1(7), "S"
+   write(6,*) "Simulation time =", value2(5)-value1(5), "H",         &
+                                   value2(6)-value1(6), "M",         &
+                                   value2(5)-value1(7), "S"
 
-
-   deallocate (r_point)
-   deallocate (q_point)
-   deallocate (real_point)
-   deallocate (recip_point)
+   deallocate ( r_point )
+   deallocate ( q_point )
    
 
-end program phmd
+end program phq

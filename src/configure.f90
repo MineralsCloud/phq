@@ -2,7 +2,7 @@
 module quantity
 !*****************************************************************************
 !
-!  Program:    phmd
+!  Program:    phq
 !
 !  Module:     quantity
 !
@@ -15,6 +15,8 @@ module quantity
 !*****************************************************************************
 !  shared variables
 
+   character ( len = 20 ), dimension ( 10 ) :: element
+
    integer :: n_atoms
    integer :: n_atom1
    integer :: n_species
@@ -24,7 +26,7 @@ module quantity
    integer :: n_step_initial   !  The first n_step_initial MD will not be output by read_md.f90
    integer :: n_corr
    integer :: n_window
-   integer :: block
+   integer :: method
    integer :: super_size
    integer, dimension(3) :: supercell
    integer, dimension(3) :: super
@@ -33,30 +35,36 @@ module quantity
    double precision :: lattice_parameter
    double precision :: d_t                              ! MD time length
    double precision :: temperaturemd                    ! MD temperature
+   double precision :: mass(10)
    double precision, dimension(3,3) :: celldm
    double precision, dimension(3,3) :: recip
-   double precision, allocatable :: cartesian_position(:,:)
-   double precision, allocatable :: alat_position(:,:)
    double precision, allocatable :: alat_md_position(:,:,:)
+   double precision, allocatable :: alat_position(:,:)
+   double precision, allocatable :: ammode (:)
+   double precision, allocatable :: atom_mass(:)
    double precision, allocatable :: cartesian_md_position(:,:,:)
+   double precision, allocatable :: cartesian_position(:,:)
    double precision, allocatable :: displacement ( :,:,:)
-   double precision, allocatable :: md_force (:,:,:)
-   double precision, allocatable :: r_point (:,:)
-   double precision, allocatable :: q_point (:,:)
-   double precision, allocatable :: real_point (:,:)
-   double precision, allocatable :: recip_point (:,:)
-   double precision, allocatable :: omega_phonon (:) 
+   double precision, allocatable :: kinetic_energy(:)
+   double precision, allocatable :: md_force (:,:,:) 
    double precision, allocatable :: omega_corr (:)
    double precision, allocatable :: omega_corr_fit (:)
-   double precision, allocatable :: omega_mem (:)
    double precision, allocatable :: omega_lorentzian (:)
-   double precision, allocatable :: temperature(:)
-   double precision, allocatable :: kinetic_energy(:)
-   double precision, allocatable :: total_energy(:) 
-   double precision, allocatable :: atom_mass(:)
+   double precision, allocatable :: omega_mem (:)
+   double precision, allocatable :: omega_phonon (:)
+   double precision, allocatable :: primitive_cell (:,:)
+   double precision, allocatable :: primitive_position (:,:)
+   double precision, allocatable :: q_point (:,:)
+   double precision, allocatable :: r_point (:,:)
    double precision, allocatable :: real_vector (:,:)
+   double precision, allocatable :: tau_fourier (:)
+   double precision, allocatable :: tau_mem (:)
+   double precision, allocatable :: taumode (:)
+   double precision, allocatable :: temperature(:)
+   double precision, allocatable :: total_energy(:) 
 
    complex ( kind = kind( 0.0d0 ) ), allocatable :: eigen_vector(:,:)
+   complex ( kind = kind( 0.0d0 ) ), allocatable :: temp_vector(:,:)
    complex ( kind = kind( 0.0d0 ) ), allocatable :: vector_q (:,:,:)
 
 !*****************************************************************************
@@ -68,7 +76,7 @@ end module quantity
 module parameter
 !*****************************************************************************
 !
-!  Program:    phmd
+!  Program:    phq
 !
 !  Module:     parameter
 !
@@ -110,6 +118,7 @@ module parameter
    double precision, parameter :: ryd = 13.60569253 * 1.60217646d-19
    double precision, parameter :: atu = 4.8378d-17
    double precision, parameter :: e_mass = 5.4858d-4   !  unit = amu
+   double precision, parameter :: n_emass = 911.44424213227d0
    double precision, parameter :: atm = 2.418884326505d-17
    double precision, parameter :: boltzmann_k = 8.617332478d-5   ! ev K-1  
    double precision, parameter :: H_planck_SI = 6.62606896E-34   ! J s
@@ -134,7 +143,7 @@ end module parameter
 module text
 !*****************************************************************************
 !
-!  Program:    phmd
+!  Program:    phq
 !
 !  Module:     text
 !

@@ -1,30 +1,30 @@
-!*****************************************************************************
+!**************************************************************************
 module main 
-!*****************************************************************************
+!**************************************************************************
 !
-!  Program:    phmd
+!  Program:    phq
 !
 !  Module:     main
 !
-!*****************************************************************************
+!**************************************************************************
 !  modules used
    
    use  quantity
    use  parameter
 
-!*****************************************************************************
+!**************************************************************************
    
    implicit none
 
-!*****************************************************************************
+!**************************************************************************
 
 contains
 
-!*************************************************************************
+!**************************************************************************
 subroutine control    ( debug )
-!*************************************************************************
+!**************************************************************************
 !
-!     Program:          phmd
+!     Program:          phq
 !
 !     Subroutine:       control
 !
@@ -32,7 +32,7 @@ subroutine control    ( debug )
 
   implicit none
   
-!***************************************************************************
+!**************************************************************************
 !Shared variables
   
   logical debug 
@@ -40,7 +40,7 @@ subroutine control    ( debug )
 !**************************************************************************
 !  Start of subroutine
   
-  if( debug ) write(6,'(a)') 'Entering mechanical_prop()...'
+   write(6,*) "Entering phq"
 
    OPEN(unit=11, file='scf.out')
    OPEN(unit=12, file='md.out')
@@ -56,25 +56,35 @@ subroutine control    ( debug )
    ! call dynamics_matrix (debug)
    call dynamics_matrix_md (debug)
 
-   close( unit = 11 )
-   close( unit = 12 )
-   close( unit = 21 ) 
-
-   deallocate ( alat_position )
-   deallocate ( cartesian_position )
    deallocate ( alat_md_position )
-   deallocate ( cartesian_md_position )
-   deallocate ( md_force )
+   deallocate ( alat_position )
+   deallocate ( ammode )
    deallocate ( atom_mass )
+   deallocate ( cartesian_md_position )
+   deallocate ( cartesian_position )
    deallocate ( displacement )
    deallocate ( eigen_vector )
-   deallocate ( real_vector )
-   deallocate ( omega_phonon )
+   deallocate ( kinetic_energy )
+   deallocate ( md_force )
    deallocate ( omega_corr )
    deallocate ( omega_corr_fit )
-   deallocate ( omega_mem )
    deallocate ( omega_lorentzian )
+   deallocate ( omega_mem )
+   deallocate ( omega_phonon )
+   deallocate ( primitive_cell )
+   deallocate ( primitive_position )
+   deallocate ( real_vector )
+   deallocate ( tau_fourier )
+   deallocate ( tau_mem )
+   deallocate ( taumode )
+   deallocate ( temp_vector )
+   deallocate ( temperature )
+   deallocate ( total_energy )
    deallocate ( vector_q )
+
+   close( unit = 11 )
+   close( unit = 12 )
+   close( unit = 21 )
 
 end subroutine control 
 !**************************************************************************
@@ -104,22 +114,16 @@ subroutine read_scf( debug )
 
   character ( len = 80 ) :: line
   character ( len = 30 ), dimension ( 10 ) :: words
-  character ( len = 30 ), dimension ( 12 ), parameter ::                 &
+  character ( len = 30 ), dimension ( 6 ), parameter ::                   &
        command = (/                             &
-       'lattice_parameter            ',     & ! 1    
-       'natom                        ',     & ! 2    
-       'cell_parameters              ',     & ! 3    
-       'atomic_positions             ',     & ! 4    
-       'dynamics                     ',     & ! 5
-       'entering                     ',     & ! 6
-       'etot                         ',     & ! 7
-       'temperature                  ',     & ! 8
-       'axial_optimization           ',     & ! 9
-       'md_once                      ',     & ! 10
-       'q-points                     ',     & ! 11   
-       'reciprocal_axes              '/)      ! 12
+       'ntype                        ',     & ! 1    
+       'natom                        ',     & ! 2  
+       'mass                         ',     & ! 3
+       'lattice_parameter            ',     & ! 4    
+       'cell_parameters              ',     & ! 5    
+       'atomic_positions             '/)      ! 6    
 
-  integer :: i, j, j1, j2, j3, n
+  integer :: i, j, n
   integer :: n_integers
   integer :: n_line
   integer :: n_words
@@ -129,18 +133,13 @@ subroutine read_scf( debug )
   integer :: integer_numbers(10)
   
   double precision :: real_numbers(10)
-  double precision :: step1, step2, step3
 
 !**************************************************************************
 !  Start of subroutine
 
-  if ( debug ) write(*,*) 'Entering read_input_mechanical()'
-
-  open(unit=11)
+  write(6,*) "Reading scf"
 
   n_line = 0
-
-!  rewind( unit = 11 )
  
   do 
     
@@ -152,23 +151,40 @@ subroutine read_scf( debug )
      
      if ( line(1:1) == '#' ) cycle
      
-     call split_line( line, n_words, words,                              &
-          n_integers, integer_numbers,                                   &
+     call split_line( line, n_words, words,                               &
+          n_integers, integer_numbers,                                    &
           n_reals, real_numbers )
-    
+
      if (words(1) == command(1)) then
           
-         lattice_parameter  = real_numbers (1)   
+         n_species  = integer_numbers (1)   
 
      else if (words(1) == command(2)) then
 
          n_atom1 = integer_numbers (1)  
          n_atoms = n_atom1 * super_size   
 
-         allocate( alat_position( n_atoms, 3 ) )   
-         allocate( cartesian_position( n_atoms, 3 ) )   
-
+         allocate ( primitive_position ( n_atom1, 3 ) )
+         allocate ( primitive_cell ( n_atom1, 2 ) )
+         allocate ( atom_mass (n_atoms) )
+  
      else if (words(1) == command(3)) then
+
+         do j=1, n_species
+            read(11, "(a80)" ) line
+            n_line = n_line + 1
+            call split_line( line, n_words, words,                        &
+                 n_integers, integer_numbers,                             &
+                 n_reals, real_numbers )
+            element(j) = words(1)
+            mass(j) = real_numbers(1)
+         end do
+
+     else if (words(1) == command(4)) then
+          
+         lattice_parameter  = real_numbers (1)   
+
+     else if (words(1) == command(5)) then
         
          do i=1, 3 
             read(11, "(a80)" ) line
@@ -182,10 +198,10 @@ subroutine read_scf( debug )
                 celldm(i,1) = real_numbers(1)  
                 celldm(i,2) = real_numbers(2)
                 celldm(i,3) = real_numbers(3)
-            endif 
+            end if 
          end do 
      
-     else if (words(1) == command(4)) then
+     else if (words(1) == command(6)) then
       
          do i=1, n_atom1
             read(11, "(a80)" ) line
@@ -196,189 +212,42 @@ subroutine read_scf( debug )
             if (n_reals < 3) then
                write (6,*) "(n_reals < 3" 
             else
-               alat_position(i,1) = real_numbers(1)   
-               alat_position(i,2) = real_numbers(2)
-               alat_position(i,3) = real_numbers(3)
+               primitive_position(i,1) = real_numbers(1)   
+               primitive_position(i,2) = real_numbers(2)
+               primitive_position(i,3) = real_numbers(3)
 
-               cartesian_position (i,1) =                                 &  
-                      alat_position(i,1) *  celldm(1,1) +                 &  
-                      alat_position(i,2) *  celldm(2,1) +                 &
-                      alat_position(i,3) *  celldm(3,1)                        
-               cartesian_position (i,2) =                                 &
-                      alat_position(i,1) *  celldm(1,2) +                 &
-                      alat_position(i,2) *  celldm(2,2) +                 &
-                      alat_position(i,3) *  celldm(3,2)
-               cartesian_position (i,3) =                                 &
-                      alat_position(i,1) *  celldm(1,3) +                 &
-                      alat_position(i,2) *  celldm(2,3) +                 &
-                      alat_position(i,3) *  celldm(3,3)
-            endif 
+               do j=1, n_species
+                  if (words(1) == element(j)) then
+                     primitive_cell(i,1) = j 
+                     primitive_cell(i,2) = mass(j)
+                  end if
+               end do
+
+            end if 
          end do 
 
-     else if (words(1) == command(11)) then
-
-        do i=1, super_size 
-            read(11, "(a80)" ) line
-            n_line = n_line + 1
-            call split_line( line, n_words, words,                        &
-                             n_integers, integer_numbers,                 &
-                             n_reals, real_numbers )
-
-            q_point (i,1) = real_numbers(1)   
-            q_point (i,2) = real_numbers(2)   
-            q_point (i,3) = real_numbers(3)
-
-        end do
-
-     else if (words(1) == command(12)) then
-        
-         do i=1, 3 
-            read(11, "(a80)" ) line
-            n_line = n_line + 1
-            call split_line( line, n_words, words,                        &
-                             n_integers, integer_numbers,                 &
-                             n_reals, real_numbers )
-            if (n_reals < 3) then
-                write (6,*) "n_reals < 3" 
-            else
-                recip(i,1) = real_numbers(1)  
-                recip(i,2) = real_numbers(2)
-                recip(i,3) = real_numbers(3)
-            endif 
-         end do 
-
-     end if
-
+     end if 
+     
   end do
+
+
+!
+! supercell lattice vector
+!                      
 
   do i =1 , 3
-      celldm(i,:) = celldm(i,:) * dble (super(i))   
-      alat_position(:,i) = alat_position(:,i) / dble (super(i))   
-  end do
-
-  step1 = one / dble (super(1))  
-  do j =1, super (1) -1
-      do i =1, n_atom1
-           alat_position ( i + n_atom1 *j,1 ) =                           &
-                                  alat_position ( i,1 ) + step1 * j
-           alat_position ( i + n_atom1 *j,2 ) = alat_position ( i,2 ) 
-           alat_position ( i + n_atom1 *j,3 ) = alat_position ( i,3 )
-      end do
-  end do
- 
-  step2 = one / dble (super(2))
-  do j =1, super (2) -1 
-       do i =1, n_atom1 * super(1)
-           alat_position ( i + n_atom1 * super(1) *j,1 )  =               &
-                                  alat_position ( i,1 ) 
-           alat_position ( i + n_atom1 * super(1) *j,2 )  =               &
-                                  alat_position ( i,2 ) + step2 * j
-           alat_position ( i + n_atom1 * super(1) *j,3 )  =               &
-                                  alat_position ( i,3 )
-       end do
-  end do
-
-  step3 = one / dble (super(3))
-  do j =1, super (3) -1
-       do i =1, n_atom1 * super(1) * super(2)
-           alat_position ( i + n_atom1 * super(1) * super(2) *j,1 )  =    & 
-                                 alat_position ( i,1 )
-           alat_position ( i + n_atom1 * super(1) * super(2) *j,2 )  =    &
-                                 alat_position ( i,2 )
-           alat_position ( i + n_atom1 * super(1) * super(2) *j,3 )  =    &
-                                 alat_position ( i,3 ) + step3 * j
-       end do
-  end do
-
-  do i = 1, n_atoms 
- 
-      cartesian_position (i,1) = DOT_PRODUCT (  alat_position(i,:),       &
-                                                celldm(:,1) ) 
-      cartesian_position (i,2) = DOT_PRODUCT (  alat_position(i,:),       &
-                                                celldm(:,2) ) 
-      cartesian_position (i,3) = DOT_PRODUCT (  alat_position(i,:),       &
-                                                celldm(:,3) )
-  end do
- 
-  do i=1, n_atoms
-     cartesian_position(i,1) =  cartesian_position(i,1) * lattice_parameter  
-     cartesian_position(i,2) =  cartesian_position(i,2) * lattice_parameter  
-     cartesian_position(i,3) =  cartesian_position(i,3) * lattice_parameter
-
+      celldm(i,:) = celldm(i,:) * dble (super(i))     
   end do
 
 !
-! generate r_point and real_point
+! atomic mass of the supercell
 !
 
-  i = 0
-  r_point = zero 
-  do j3=1, super(3) 
-      do j2=1, super(2)
-           do j1=1, super(1)
-                i = i + 1
-                r_point (i,1) = dble (j1-1) / super(1)   
-                r_point (i,2) = dble (j2-1) / super(2)   
-                r_point (i,3) = dble (j3-1) / super(3)
-           end do
-      end do
+  do i=1, n_atom1
+     do j=1, super_size
+        atom_mass ( i + (j-1) * n_atom1 ) = primitive_cell ( i, 2 )
+     end do
   end do
-
-  do i = 1, super_size
-     real_point (i,1) = r_point (i,1) * celldm (1,1) + r_point (i,2) * celldm (2,1) + r_point (i,3) * celldm (3,1)
-     real_point (i,2) = r_point (i,1) * celldm (1,2) + r_point (i,2) * celldm (2,2) + r_point (i,3) * celldm (3,2)
-     real_point (i,3) = r_point (i,1) * celldm (1,3) + r_point (i,2) * celldm (2,3) + r_point (i,3) * celldm (3,3)
-  end do
-
-  do i = 1, super_size
-     recip_point (i,1) = q_point (i,1) * recip (1,1) + q_point (i,2) * recip (2,1) + q_point (i,3) * recip (3,1)
-     recip_point (i,2) = q_point (i,1) * recip (1,2) + q_point (i,2) * recip (2,2) + q_point (i,3) * recip (3,2)
-     recip_point (i,3) = q_point (i,1) * recip (1,3) + q_point (i,2) * recip (2,3) + q_point (i,3) * recip (3,3)
-  end do
-
-!
-! test
-!
-
-  write (6, *) "reading scf.out"   
-
-  write (6, *) "cell_parameters"
-  do i =1, 3
-       write (6,11)  celldm (i,:)
-  end do
-
-  write (6, *) "reciprocal_axes"
-  do i =1, 3
-       write (6,11)  recip (i,:)
-  end do
-
-  write (6, *) "r_point"              ! r-points in reduced coordinate
-  do i =1, super_size
-       write (6,11)  r_point (i,:)
-  end do
-
-  write (6, *) "q_point"              ! q-points in reduced coordinate
-  do i =1, super_size
-       write (6,11)  q_point (i,:)
-  end do
-
-  write (6, *) "real_point"           ! r-points in cartesian coordinate in unit of lattice_parameter
-  do i =1, super_size
-       write (6,11)  real_point (i,:)
-  end do
-
-  write (6, *) "recip_point"          ! q-points in cartesian coordinate in unit of 2 pi / lattice_parameter
-  do i =1, super_size
-       write (6,11)  recip_point (i,:)
-  end do
-
-!  do i =1, n_atoms
-!        write (6,12) alat_position (i,:), cartesian_position(i,:)
-!  end do
-
- 
- 11 format(1x,F15.9,1x,F15.9,1x,F15.9,1x)
- 12 format(1x,F15.9,1x,F15.9,1x,F15.9,1x,F15.9,1x,F15.9,1x,F15.9,1x)
 
 end subroutine read_scf 
 !**************************************************************************
@@ -408,24 +277,19 @@ subroutine read_md( debug )
 
   character ( len = 80 ) :: line
   character ( len = 30 ), dimension ( 10 ) :: words
-  character ( len = 15 ), dimension ( 20 ) :: element
-  character ( len = 30 ), dimension ( 13 ), parameter ::                 &
+  character ( len = 30 ), dimension ( 9 ), parameter ::                 &
        command = (/                             &
-       'mass                         ',     & ! 1
-       'force                        ',     & ! 2
-       'cell_parameters              ',     & ! 3
-       'atomic_positions             ',     & ! 4
-       'md_step                      ',     & ! 5
-       'temperature                  ',     & ! 6
-       'etot                         ',     & ! 7
-       'tem                          ',     & ! 8
-       'nstep                        ',     & ! 9
-       'total_step                   ',     & ! 10 
-       'types                        ',     & ! 11
-       'kinetic_energy               ',     & ! 12
-       'pressure                     '/)      ! 13   
+       'total_step                   ',     & ! 1   
+       'atomic_positions             ',     & ! 2
+       'md_step                      ',     & ! 3
+       'atomic_md_positions          ',     & ! 4
+       'temperature                  ',     & ! 5
+       'pressure                     ',     & ! 6
+       'force                        ',     & ! 7
+       'kinetic_energy               ',     & ! 8
+       'etot                         '/)      ! 9   
 
-  integer :: i, ii, iii, j, n  
+  integer :: i, j, n  
   integer :: n_integers
   integer :: n_line
   integer :: n_words
@@ -434,38 +298,24 @@ subroutine read_md( debug )
   integer :: status
   integer :: md_step 
   integer :: actual_step
-  integer :: i_species
-  integer :: bool
   integer :: integer_numbers(10)
  
   double precision :: real_numbers(10)
-  double precision, allocatable :: msd_ave (:)
-  double precision, allocatable :: n_atom_internal (:)
-  double precision, allocatable :: system (:,:)
-  double precision, allocatable :: pressure (:)
   double precision, allocatable :: msd (:)
+  double precision, allocatable :: msd_ave (:)
+  double precision, allocatable :: pressure (:)
 
 !**************************************************************************
 !  Start of subroutine
 
-  if ( debug ) write(*,*) 'Entering read_input_mechanical()'
+  write(6,*) "Reading md"
 
-  open(unit=13,file='temperature.out')
+  ! open(unit=13,file='temperature.out')
   open(unit=14,file='msd.out')
 
-  ii = 0
   md_step = 0
-  n_atom_internal = 0
-  system = 0
-  i_species = 0
-  
-  element = 'null'
- 
-  open(unit=12)
 
   n_line = 0
-
-!  rewind( unit = 12 )
 
   do 
     
@@ -481,77 +331,65 @@ subroutine read_md( debug )
          n_integers, integer_numbers,                                   &
          n_reals, real_numbers )
 
-    if (words(1) == command(11)) then
-
-        n_species = integer_numbers (1)
-
-    else if (words(1) == command(10)) then   
+    if (words(1) == command(1)) then   
 
         n_step = integer_numbers (1)        
 
-        allocate( alat_md_position( n_step, n_atoms, 3 ) )   
-        allocate( cartesian_md_position( n_step, n_atoms, 3 ) )   
-        allocate( displacement ( n_step, n_atoms, 3 ) )   
-        allocate( md_force( n_step, n_atoms, 3 ) )   
-        allocate( temperature (n_step))   
-        allocate( kinetic_energy (n_step))   
-        allocate( pressure (n_step))   
-        allocate( total_energy (n_step))   
-        allocate( atom_mass (n_atoms) )
-        allocate( msd (n_atoms))
-        allocate( system (n_species, n_atoms))
-        allocate( msd_ave (n_species))
-        allocate( n_atom_internal (n_species))
-
-    else if (words(1) == command(1)) then
-
-        ii = ii + 1
-        atom_mass(ii) = real_numbers(1)   
-        
-        bool = 1
-
-        do iii = 1, i_species + 1
-            if (words(2) == element(iii)) then
-                n_atom_internal (iii) = n_atom_internal (iii) + 1   
-                system (iii,ii) = 1 
-                bool = bool * 0
-            end if 
-        end do
-
-        if (bool == 1) then
-            i_species = i_species + 1
-            element(i_species) = words(2)
-            n_atom_internal (i_species) = n_atom_internal (i_species) + 1   
-            system (i_species,ii) = 1
-        end if
+        allocate ( alat_position( n_atoms, 3 ) )   
+        allocate ( cartesian_position( n_atoms, 3 ) )  
+        allocate ( alat_md_position( n_step, n_atoms, 3 ) )   
+        allocate ( cartesian_md_position( n_step, n_atoms, 3 ) )   
+        allocate ( displacement ( n_step, n_atoms, 3 ) )   
+        allocate ( md_force( n_step, n_atoms, 3 ) )   
+        allocate ( temperature (n_step))   
+        allocate ( kinetic_energy (n_step))   
+        allocate ( pressure (n_step))   
+        allocate ( total_energy (n_step))   
+        allocate ( msd (n_atoms))
+        allocate ( msd_ave (n_atoms))  
  
-    else if (words(1) == command(5)) then
+    else if (words(1) == command(2)) then
+     
+        do i=1, n_atoms
+           read(12, "(a80)" ) line
+           n_line = n_line + 1
+           call split_line( line, n_words, words,                         &
+                            n_integers, integer_numbers,                  &
+                            n_reals, real_numbers )
+           if (n_reals < 3) then
+             write (6,*) "(n_reals < 3" 
+           else
+              alat_position(i,1) = real_numbers(1)   
+              alat_position(i,2) = real_numbers(2)
+              alat_position(i,3) = real_numbers(3)
+
+              cartesian_position ( i,1 ) =                                &   
+                    alat_position( i,1 ) *  celldm(1,1) +                 &
+                    alat_position( i,2 ) *  celldm(2,1) +                 &
+                    alat_position( i,3 ) *  celldm(3,1)         
+              cartesian_position ( i,2 ) =                                &
+                    alat_position( i,1 ) *  celldm(1,2) +                 &
+                    alat_position( i,2 ) *  celldm(2,2) +                 &
+                    alat_position( i,3 ) *  celldm(3,2)
+              cartesian_position ( i,3 ) =                                &
+                    alat_position( i,1 ) *  celldm(1,3) +                 &
+                    alat_position( i,2 ) *  celldm(2,3) +                 &
+                    alat_position( i,3 ) *  celldm(3,3)
+
+           end if 
+        end do 
+
+    else if (words(1) == command(3)) then
 
         md_step = md_step + 1   
-
-    else if (words(1) == command(6)) then
-
-        temperature(md_step) = real_numbers  (1)  
-
-    else if (words(1) == command(12)) then
-
-        kinetic_energy (md_step) = real_numbers  (1)   
-
-    else if (words(1) == command(13)) then
-
-        pressure (md_step) = real_numbers  (1)   
-
-    else if (words(1) == command(7)) then
-
-        total_energy(md_step) = real_numbers  (1)  
 
     else if (words(1) == command(4)) then
      
         do i=1, n_atoms
            read(12, "(a80)" ) line
            n_line = n_line + 1
-           call split_line( line, n_words, words,                        &
-                            n_integers, integer_numbers,                 &
+           call split_line( line, n_words, words,                         &
+                            n_integers, integer_numbers,                  &
                             n_reals, real_numbers )
            if (n_reals < 3) then
              write (6,*) "(n_reals < 3" 
@@ -559,24 +397,48 @@ subroutine read_md( debug )
               alat_md_position(md_step,i,1) = real_numbers(1)   
               alat_md_position(md_step,i,2) = real_numbers(2)
               alat_md_position(md_step,i,3) = real_numbers(3)
+              
+              if ( alat_md_position(md_step,i,1) - alat_position(i,1) > 0.5 ) then
+                  alat_md_position(md_step,i,1) = alat_md_position(md_step,i,1) - 1
+              else if ( alat_md_position(md_step,i,1) - alat_position(i,1) < -0.5 ) then
+                  alat_md_position(md_step,i,1) = alat_md_position(md_step,i,1) + 1
+              end if
+              if ( alat_md_position(md_step,i,2) - alat_position(i,2) > 0.5 ) then
+                  alat_md_position(md_step,i,2) = alat_md_position(md_step,i,2) - 1
+              else if ( alat_md_position(md_step,i,2) - alat_position(i,2) < -0.5 ) then
+                  alat_md_position(md_step,i,2) = alat_md_position(md_step,i,2) + 1
+              end if
+              if ( alat_md_position(md_step,i,3) - alat_position(i,3) > 0.5 ) then
+                  alat_md_position(md_step,i,3) = alat_md_position(md_step,i,3) - 1
+              else if ( alat_md_position(md_step,i,3) - alat_position(i,3) < -0.5 ) then
+                  alat_md_position(md_step,i,3) = alat_md_position(md_step,i,3) + 1
+              end if
 
-              cartesian_md_position ( md_step,i,1 ) =                    &   
-                     alat_md_position( md_step,i,1 ) *  celldm(1,1) +    &
-                     alat_md_position( md_step,i,2 ) *  celldm(2,1) +    &
+              cartesian_md_position ( md_step,i,1 ) =                     &   
+                     alat_md_position( md_step,i,1 ) *  celldm(1,1) +     &
+                     alat_md_position( md_step,i,2 ) *  celldm(2,1) +     &
                      alat_md_position( md_step,i,3 ) *  celldm(3,1)         
-              cartesian_md_position ( md_step,i,2 ) =                    &
-                     alat_md_position( md_step,i,1 ) *  celldm(1,2) +    &
-                     alat_md_position( md_step,i,2 ) *  celldm(2,2) +    &
+              cartesian_md_position ( md_step,i,2 ) =                     &
+                     alat_md_position( md_step,i,1 ) *  celldm(1,2) +     &
+                     alat_md_position( md_step,i,2 ) *  celldm(2,2) +     &
                      alat_md_position( md_step,i,3 ) *  celldm(3,2)
-              cartesian_md_position ( md_step,i,3 ) =                    &
-                     alat_md_position( md_step,i,1 ) *  celldm(1,3) +    &
-                     alat_md_position( md_step,i,2 ) *  celldm(2,3) +    &
+              cartesian_md_position ( md_step,i,3 ) =                     &
+                     alat_md_position( md_step,i,1 ) *  celldm(1,3) +     &
+                     alat_md_position( md_step,i,2 ) *  celldm(2,3) +     &
                      alat_md_position( md_step,i,3 ) *  celldm(3,3)
 
-           endif 
+           end if 
         end do 
 
-    else if (words(1) == command(2)) then
+    else if (words(1) == command(5)) then
+
+        temperature(md_step) = real_numbers  (1)  
+
+    else if (words(1) == command(6)) then
+
+        pressure (md_step) = real_numbers  (1)   
+
+    else if (words(1) == command(7)) then
 
         do i=1, n_atoms
             read(12, "(a80)" ) line
@@ -590,8 +452,16 @@ subroutine read_md( debug )
                md_force(md_step,i,1) = real_numbers(1)   
                md_force(md_step,i,2) = real_numbers(2)
                md_force(md_step,i,3) = real_numbers(3)
-            endif
+            end if
          end do 
+
+    else if (words(1) == command(8)) then
+
+        kinetic_energy (md_step) = real_numbers  (1)   
+
+    else if (words(1) == command(9)) then
+
+        total_energy(md_step) = real_numbers  (1)  
 
     end if
 
@@ -605,16 +475,40 @@ subroutine read_md( debug )
       n_step_use = n_step  - 3   
   end if
 
- 
+!
+! r-points in cartesian coordinates
+!
+
+  write (6, *) "r-points in cartesian coordinates in unit of lattice_parameter"
+  do i = 1, super_size
+    r_point(i,1) = cartesian_position( n_atom1 * (i-1) + 1, 1 )           &
+                 - cartesian_position(1,1)
+    r_point(i,2) = cartesian_position( n_atom1 * (i-1) + 1, 2 )           &
+                 - cartesian_position(1,2)
+    r_point(i,3) = cartesian_position( n_atom1 * (i-1) + 1, 3 )           &
+                 - cartesian_position(1,3)
+    write (6,11)  r_point (i,:)
+  end do
+
+!
+! atomic positions in cartesian coordinates
+!
+
+  do i=1, n_atoms
+     cartesian_position(i,1) =  cartesian_position(i,1) * lattice_parameter  
+     cartesian_position(i,2) =  cartesian_position(i,2) * lattice_parameter  
+     cartesian_position(i,3) =  cartesian_position(i,3) * lattice_parameter
+  end do
+
   do j = 1, md_step -1   
  
      do i = 1, n_atoms
 
-        cartesian_md_position ( j,i,1 ) =                          &
+        cartesian_md_position ( j,i,1 ) =                                 &
             cartesian_md_position ( j,i,1 ) * lattice_parameter        
-        cartesian_md_position ( j,i,2 ) =                          &
+        cartesian_md_position ( j,i,2 ) =                                 &
             cartesian_md_position ( j,i,2 ) * lattice_parameter
-        cartesian_md_position ( j,i,3 ) =                          &
+        cartesian_md_position ( j,i,3 ) =                                 &
             cartesian_md_position ( j,i,3 ) * lattice_parameter
 
      end do
@@ -636,7 +530,7 @@ subroutine read_md( debug )
 ! MSD
 !
 
-  write(13,*) "md_step = ", md_step - 1   
+  ! write(13,*) "md_step = ", md_step - 1   
   msd = zero
   do j=1, md_step - 1   
       do i = 1, n_atoms
@@ -645,49 +539,40 @@ subroutine read_md( debug )
                        displacement ( j,i,2 )**two +                      &
                        displacement ( j,i,3 )**two )
       end do 
-      write(13,19) j, pressure (j), temperature(j),                       &
-                   kinetic_energy(j), total_energy(j)
+      ! write(13,19) j, pressure (j), temperature(j),                       &
+      !              kinetic_energy(j), total_energy(j)
   end do 
 
-  msd_ave = zero
-  do j = 1, n_species
-     do i = 1, n_atoms
-        msd_ave (j) = msd_ave (j) + msd (i) * system (j,i) /dble (md_step-1)   
-     end do
-     msd_ave (j) = msd_ave (j) / dble (n_atom_internal(j))  
-
-     write(14,21,advance='NO') msd_ave (j)
-
+  do i = 1, n_atoms
+      msd_ave (i) = msd (i) / dble (md_step-1)  
+      write(14,21) i, msd_ave (i) 
   end do
 
-
-  do j=1, md_step
-       do i = 1, n_atoms
-            if(displacement ( j,i,1 )> 0.8) then   
-                 write(13,*) "folding: ",i
-            end if
-            if(displacement ( j,i,2 )> 0.8) then
-                  write(13,*) "folding: ",i
-            end if
-            if(displacement ( j,i,3 )> 0.8) then
-                 write(13,*) "folding: ",i
-            end if
-       end do
-  end do
+  ! do j=1, md_step
+  !      do i = 1, n_atoms
+  !           if(displacement ( j,i,1 )> 0.8) then   
+  !                write(13,*) "folding: ",i
+  !           end if
+  !           if(displacement ( j,i,2 )> 0.8) then
+  !                 write(13,*) "folding: ",i
+  !           end if
+  !           if(displacement ( j,i,3 )> 0.8) then
+  !                write(13,*) "folding: ",i
+  !           end if
+  !      end do
+  ! end do
 
   11 format(1x,F15.9,1x,F15.9,1x,F15.9,1x) 
   19 format(1x,i8,1x,F10.3,1x,F12.5,1x,F14.8,1x,F18.8,1x)
   20 format(1x,i8,1x)
-  21 format(1x,f10.6,1x)
+  21 format(1x,i4,1x,f10.6,1x)
 
-  close(13)
-  close (14)
+  ! close(13)
+  close(14)
 
-  deallocate (pressure)
-  deallocate (msd)
-  deallocate (system)
-  deallocate (msd_ave)
-  deallocate (n_atom_internal)
+  deallocate ( pressure )
+  deallocate ( msd )
+  deallocate ( msd_ave )
 
 end subroutine read_md
 !**************************************************************************
@@ -696,22 +581,22 @@ subroutine properties ( debug )
 !
 !     Purpose:  This subroutine obtains C_v from MD simulations 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k
@@ -760,10 +645,6 @@ subroutine properties ( debug )
   close (61)
 
   11 format(1x,i8,1x,f20.9,1x,f20.10,1x,f10.5,1x)
-
-  deallocate ( kinetic_energy )
-  deallocate ( total_energy )
-  deallocate ( temperature )
   
 end subroutine properties 
 !**************************************************************************
@@ -793,7 +674,7 @@ subroutine read_dyn ( debug )
 
   character ( len = 80 ) :: line
   character ( len = 30 ), dimension ( 10 ) :: words
-  character ( len = 30 ), dimension ( 2 ), parameter ::                 &
+  character ( len = 30 ), dimension ( 2 ), parameter ::                   &
        command = (/                             &
        'q                            ',     & ! 1
        'freq                         '/)      ! 2
@@ -806,6 +687,7 @@ subroutine read_dyn ( debug )
   integer :: n_stress
   integer :: status 
   integer :: md_step 
+  integer :: n_q
   integer :: n_omega 
   integer :: integer_numbers(10)
   
@@ -814,28 +696,24 @@ subroutine read_dyn ( debug )
   double precision :: theta
 
   complex ( kind = kind( 0.0d0 ) ) :: phase 
-  complex ( kind = kind( 0.0d0 ) ), allocatable :: temp_vector(:,:)
 
 !**************************************************************************
 !  Start of subroutine
 
-  if ( debug ) write(*,*) 'Entering read_input_mechanical()'
+  write(6,*) "Reading dyn"
 
-  OPEN(unit=21, file='dyn.out')
   OPEN(unit=22, file='vector.out')
   OPEN(unit=23, file='vector_q.out')
   
-  allocate( vector_q (n_atom1 *3, n_atom1 *3, super_size ) )
-  allocate( eigen_vector ( n_atoms *3, n_atoms *3 ) )
-  allocate( real_vector ( n_atoms *3, n_atoms *3 ) )
-  allocate( omega_phonon ( n_atoms *3 ) )
-  allocate( temp_vector ( n_atoms *3, n_atoms *3 ) )
+  allocate ( vector_q (n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( eigen_vector ( n_atoms *3, n_atoms *3 ) )
+  allocate ( real_vector ( n_atoms *3, n_atoms *3 ) )
+  allocate ( omega_phonon ( n_atoms *3 ) )
+  allocate ( temp_vector ( n_atoms *3, n_atoms *3 ) )
 
   n_line = 0
-
-  n_omega =0
-
-!  rewind( unit = 21 )
+  n_q = 0
+  n_omega = 0
  
   do 
     
@@ -847,32 +725,51 @@ subroutine read_dyn ( debug )
      
      if ( line(1:1) == '#' ) cycle
      
-     call split_line( line, n_words, words,                              &
-          n_integers, integer_numbers,                                   &
+     call split_line( line, n_words, words,                               &
+          n_integers, integer_numbers,                                    &
           n_reals, real_numbers )
 
-     if (words(1) == command(2)) then
+     if (words(1) == command(1)) then
+
+         n_q = INT (n_omega/n_atom1/3) + 1
+         q_point (n_q,1) = real_numbers(1)
+         q_point (n_q,2) = real_numbers(2)
+         q_point (n_q,3) = real_numbers(3)
+
+     else if (words(1) == command(2)) then
      
          n_omega =  n_omega + 1   
          omega_phonon (n_omega) = real_numbers (1)   
  
-         do i=1, n_atom1 * 3
+         do i=1, n_atom1 
             read(21, "(a80)" ) line
             n_line = n_line + 1
             call split_line( line, n_words, words,                        &
                              n_integers, integer_numbers,                 &
                              n_reals, real_numbers )
-            if (n_reals < 2) then
-               write (6,*) "n_reals < 2" 
+            if (n_reals < 6) then
+               write (6,*) "n_reals < 6" 
             else
-               temp_vector ( i, n_omega ) = CMPLX (                       &   
-                                   real_numbers(1), real_numbers(2)       &   
-                                                    )                         
-            endif                                                             
+               temp_vector ( 3*i-2, n_omega ) = CMPLX (                   &   
+                                   real_numbers(1), real_numbers(2) )
+               temp_vector ( 3*i-1, n_omega ) = CMPLX (                   &   
+                                   real_numbers(3), real_numbers(4) )
+               temp_vector ( 3*i, n_omega ) = CMPLX (                     &   
+                                   real_numbers(5), real_numbers(6) )                        
+            end if                                                             
          end do 
 
      end if
 
+  end do
+
+!
+! q-points in cartesian coordinates
+!
+
+  write (6, *) "q-points in cartesian coordinates in unit of 2*pi / lattice_parameter"
+  do i = 1, super_size
+    write (6,15)  q_point (i,:)
   end do
 
 !
@@ -884,11 +781,11 @@ subroutine read_dyn ( debug )
           do i =1, n_atom1 * 3
               do n = 1, super_size
                    theta = two * pi *                                     &
-                           DOT_PRODUCT (recip_point (j,:), real_point (n,:) )
+                      DOT_PRODUCT ( q_point (j,:), r_point (n,:) )
                    phase = CMPLX ( COS (theta), SIN (theta) )   
                    eigen_vector                                           &   
                      ( i + (n-1) *n_atom1 *3, k + (j-1) *n_atom1 *3 ) =   &   
-                         temp_vector ( i, k +(j-1) *n_atom1 *3 ) * phase   
+                        temp_vector ( i, k +(j-1) *n_atom1 *3 ) * phase   
               end do                                                                         
           end do
      end do
@@ -913,7 +810,7 @@ subroutine read_dyn ( debug )
 ! normalize the eigenvectors
 !
   do i = 1,  n_atoms * 3 
-      orthog = DBLE ( DOT_PRODUCT (  (eigen_vector (:,i) ),             &
+      orthog = DBLE ( DOT_PRODUCT (  (eigen_vector (:,i) ),               &
                                 eigen_vector (:,i) ) )
 
       eigen_vector (:,i) = eigen_vector (:,i) / sqrt (orthog)  
@@ -966,10 +863,10 @@ subroutine read_dyn ( debug )
 !
 
    do j = 1, super_size
-      write (6,*) super_size," =", j
+      write (6,16) j
       do i = 1, n_atom1 * 3
-          orthog = DBLE (dot_product (vector_q (:,i,j), vector_q (:,6,j)) )   
- 
+          orthog = DBLE (dot_product (vector_q (:,i,j),                   &
+                                      vector_q (:,int(n_atom1 * 3),j)))    
           write (6,13) i, orthog , omega_phonon (i + (j -1) * n_atom1 *3)
       end do
   end do
@@ -978,7 +875,6 @@ subroutine read_dyn ( debug )
 ! output vectors
 !
 
-  write(6,*) "reading dyn"
   do i =1, n_atoms * 3
        write(22,*) "mode = ", i
        do j = 1, n_atoms * 3
@@ -996,30 +892,30 @@ subroutine read_dyn ( debug )
       end do
   end do 
 
-  13 format(1x,i9,1x,f25.15,1x,f25.15,1x)
   11 format (1x,f15.6,1x,f15.6,1x)
   12 format (1x,i5,1x,i5,1x,f15.10,1x,f15.10,1x)
+  13 format (1x,i9,1x,f25.15,1x,f25.15,1x)
   14 format (1x,f20.15,1x,f20.15,1x)
-
-  deallocate ( temp_vector)
+  15 format (1x,F15.9,1x,F15.9,1x,F15.9,1x)
+  16 format                                                               &
+          (" q-point NO.",i4,"   orthogonality            frequency (THz)")
 
   close (22)
-  close (23)
+  close (23) 
 
 end subroutine read_dyn
-
-!**************************************************************************
+!*************************************************************************
 subroutine harmonic_matrix ( debug ) 
-!**************************************************************************
+!*************************************************************************
 !
-!     Purpose:  This subroutine obtains the dynamics matrix from omega. 
+!     Purpose:  This subroutine obtains the force constant matrix from omega. 
 !                            
-!***************************************************************************
+!*************************************************************************
 !  used modules
   
    use  parameter
 
-!************************************************************************
+!*************************************************************************
 
   implicit none
 
@@ -1041,9 +937,9 @@ subroutine harmonic_matrix ( debug )
 !*************************************************************************
 !  Start of subroutine
 
-  allocate( dynamics_matrix_q (n_atoms *3, n_atoms *3) )
-  allocate( diagonal_matrix_q (n_atoms *3, n_atoms *3) )
-  allocate( matrix_q (n_atoms *3, n_atoms *3)  )
+  allocate ( dynamics_matrix_q (n_atoms *3, n_atoms *3) )
+  allocate ( diagonal_matrix_q (n_atoms *3, n_atoms *3) )
+  allocate ( matrix_q (n_atoms *3, n_atoms *3)  )
   allocate ( omega_dynmat (n_atoms *3 ) )
 
   OPEN(unit=41, file='harmonic_matrix.mat')
@@ -1118,24 +1014,24 @@ subroutine harmonic_matrix ( debug )
   11 format(1x,i5,1x,i5,1x)
   12 format(1x,f15.10,2x,f15.10,2x,f15.10,1x)
 
-  deallocate (dynamics_matrix_q)
-  deallocate (diagonal_matrix_q)
-  deallocate (matrix_q)
-  deallocate (omega_dynmat)
+  deallocate ( dynamics_matrix_q )
+  deallocate ( diagonal_matrix_q )
+  deallocate ( matrix_q )
+  deallocate ( omega_dynmat )
 
 end subroutine harmonic_matrix 
-!**************************************************************************
+!*************************************************************************
 subroutine harmonic_force ( debug, dynamics_matrix_q ) 
-!**************************************************************************
+!*************************************************************************
 !
-!     Purpose:  This subroutine obtains the dynamics matrix from omega. 
+!     Purpose:  This subroutine obtains the interatomic harmonic force.
 !                            
-!***************************************************************************
+!*************************************************************************
 !  used modules
   
    use  parameter
 
-!************************************************************************
+!*************************************************************************
 
   implicit none
 
@@ -1160,8 +1056,8 @@ subroutine harmonic_force ( debug, dynamics_matrix_q )
 
   OPEN(unit=42, file='harmonic_force.mat')
 
-  allocate( displace (n_step, n_atoms *3) )
-  allocate( force_h (n_step, n_atoms *3) )
+  allocate ( displace (n_step, n_atoms *3) )
+  allocate ( force_h (n_step, n_atoms *3) )
 
   do k = 1, n_step_use
       do j =1, n_atoms
@@ -1203,8 +1099,8 @@ subroutine harmonic_force ( debug, dynamics_matrix_q )
 
   close (42)
 
-  deallocate (displace)
-  deallocate (force_h)  
+  deallocate ( displace )
+  deallocate ( force_h )  
 
 end subroutine harmonic_force 
 !**************************************************************************
@@ -1213,22 +1109,22 @@ subroutine frequency ( debug )
 !
 !     Purpose:  This subroutine obtains omega from MD simulations. 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k 
@@ -1243,14 +1139,14 @@ subroutine frequency ( debug )
 !*************************************************************************
 !  Start of subroutine
 
-  allocate( omega_corr_fit (n_atoms * 3) )
-  allocate( omega_corr (n_atoms * 3) )
-  allocate( omega_mem (n_atoms * 3) )
-  allocate( omega_lorentzian (n_atoms * 3) )
-  allocate( mass_extension ( n_atoms * 3 ) )
-  allocate( displace_extension ( n_step,n_atoms * 3 ) )
-  allocate( velocity ( n_step, n_atoms * 3 ) )
-  allocate( velocity_0 ( n_step, n_atoms * 3 ) )
+  allocate ( omega_corr_fit (n_atoms * 3) )
+  allocate ( omega_corr (n_atoms * 3) )
+  allocate ( omega_mem (n_atoms * 3) )
+  allocate ( omega_lorentzian (n_atoms * 3) )
+  allocate ( mass_extension ( n_atoms * 3 ) )
+  allocate ( displace_extension ( n_step,n_atoms * 3 ) )
+  allocate ( velocity ( n_step, n_atoms * 3 ) )
+  allocate ( velocity_0 ( n_step, n_atoms * 3 ) )
 
   OPEN(unit=31, file='frequency.freq')
 
@@ -1279,7 +1175,6 @@ subroutine frequency ( debug )
 
   end do 
 
-
 !
 !  calculate velocity
 !
@@ -1302,7 +1197,7 @@ subroutine frequency ( debug )
 
   do k =1, n_step -2
       do i =1, n_atoms * 3
-           velocity (k,i) = DOT_PRODUCT ( CONJG( eigen_vector (:,i) ),             &   
+           velocity (k,i) = DOT_PRODUCT ( CONJG( eigen_vector (:,i) ),   &   
                             velocity_0 (k,:) )                      
       end do
   end do
@@ -1331,11 +1226,11 @@ subroutine frequency ( debug )
 
   do j = 1, n_atoms * 3
 
-     write (31,12) j,                                                     &   
-                   omega_phonon (j) * thz_to_cm,                      &   ! harmonic phonon frequency
-                   omega_corr_fit (j),                                &   ! curve fitted phonon frequency
-                   omega_corr (j),                                    &   ! fourier transformed phonon frequency
-                   omega_mem (j)                                          ! maximum entropy method phonon frequency
+     write (31,12) j,                                                    &   
+                   omega_phonon (j) * thz_to_cm,                         &   ! harmonic phonon frequency
+                   omega_corr_fit (j),                                   &   ! curve fitted phonon frequency
+                   omega_corr (j),                                       &   ! fourier transformed phonon frequency
+                   omega_mem (j)                                             ! maximum entropy method phonon frequency
 
   end do
 
@@ -1343,11 +1238,10 @@ subroutine frequency ( debug )
 
   12 format(1x,i4,1x,f15.6,1x,f15.6,1x,f15.6,1x,f15.6,1x)
 
-  deallocate (velocity_0) 
-  deallocate (mass_extension)
-  deallocate (displace_extension)
-  deallocate (velocity)
-
+  deallocate ( velocity_0 ) 
+  deallocate ( mass_extension )
+  deallocate ( displace_extension )
+  deallocate ( velocity )
 
 end subroutine frequency 
 !**************************************************************************
@@ -1356,17 +1250,17 @@ subroutine equipartition ( debug, velocity )
 !
 !     Purpose:  This subroutine obtains e_kinetic from MD simulations. 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
@@ -1383,7 +1277,7 @@ subroutine equipartition ( debug, velocity )
 !*************************************************************************
 !  Start of subroutine
 
-  allocate( e_kinetic (n_atoms * 3) )
+  allocate ( e_kinetic (n_atoms * 3) )
 
   OPEN(unit=62, file='equipartition.out')
   
@@ -1393,9 +1287,9 @@ subroutine equipartition ( debug, velocity )
 
       do k = 3, n_step_use
 
-          e_kinetic ( i ) =  e_kinetic ( i ) +                            &   
-                DBLE ( CMPLX ( velocity(k-2,i) ) * velocity(k-2,i) ) *    &
-                amu * adu**2 / atu**2 / boltzmann_k
+          e_kinetic ( i ) =  e_kinetic ( i ) +                           &   
+             DBLE ( CMPLX ( velocity(k-2,i) ) * velocity(k-2,i) ) *      &
+             amu * adu**2 / atu**2 / boltzmann_k
 
       end do
       e_kinetic (i) = e_kinetic (i) / dble (n_step_use-2)  
@@ -1409,7 +1303,7 @@ subroutine equipartition ( debug, velocity )
 
   close (62)
 
-  deallocate (e_kinetic) 
+  deallocate ( e_kinetic ) 
  
 end subroutine equipartition 
 !**************************************************************************
@@ -1418,17 +1312,17 @@ subroutine correlation ( debug, a, na, ncorr )
 !
 !     Purpose:  This subroutine computes the velocity correlation function. 
 ! 
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
@@ -1465,7 +1359,7 @@ subroutine correlation ( debug, a, na, ncorr )
       corr (:,k) = zero
       do i = 1, na - ncorr + 1     ! loop over starting point        
           do j = 1, ncorr            ! loop over correlation time       
-              corr(j,k) = corr(j,k) +                                     &
+              corr(j,k) = corr(j,k) +                                    &
                           DBLE ( CONJG ( a(i,k) ) * a(i+j-1, k) )  
           end do                               
       end do
@@ -1474,7 +1368,7 @@ subroutine correlation ( debug, a, na, ncorr )
    end do
 
 !
-!  correlation decay  to 0.65 in amplitude. 
+!  correlation decay to 0.5 in amplitude. 
 !
  
    do k = 1, n_atoms * 3
@@ -1520,8 +1414,8 @@ subroutine correlation ( debug, a, na, ncorr )
    do j = 1, ncorr
         write (63,11,advance='NO') j
         do i = 1, n_atoms*3
-            write (63,12,advance='NO')  corr (j,i) /                      &   
-                  e_mass * 27.2114 /two / boltzmann_k / two
+            write (63,12,advance='NO')  corr (j,i) /                     &   
+                  e_mass * 27.2114d0 /two / boltzmann_k / two
         end do
         write(63,*)
    end do
@@ -1537,7 +1431,7 @@ subroutine correlation ( debug, a, na, ncorr )
    call correlation_fit ( debug, ncorr, corr, n_win_mode )
 
 !
-! Fourier transform
+! Fourier transformation
 ! 
    
    call corr_fourier ( debug, ncorr, corr, n_win_mode ) 
@@ -1546,8 +1440,8 @@ subroutine correlation ( debug, a, na, ncorr )
    11 format(1x,i8,1x)
    12  format(1x,f20.10,1x)
 
-   deallocate (n_win_mode)
-   deallocate (corr)
+   deallocate ( n_win_mode )
+   deallocate ( corr )
 
    close (63)
 
@@ -1557,19 +1451,19 @@ subroutine correlation_fit ( debug, ncorr, corr, n_win )
 !**************************************************************************
 !
 !   Purpose:    This subroutine fits the correlation function accrording to 
-!               Tao Sun's Paper PRB 2010. 
+!               Tao Sun's Paper PRB 82, 224304 (2010). 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
@@ -1579,7 +1473,7 @@ subroutine correlation_fit ( debug, ncorr, corr, n_win )
 
   double precision, intent (IN) :: corr ( ncorr, n_atoms * 3)
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: a, b, c, i, j, m, k, n, v
@@ -1590,14 +1484,12 @@ subroutine correlation_fit ( debug, ncorr, corr, n_win )
   double precision :: million
   double precision :: fit,t
   double precision, allocatable :: result (:,:)
-  double precision, allocatable :: ammode (:)
-  double precision, allocatable :: taumode (:)
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
-  allocate ( ammode ( n_atoms * 3 ) )
-  allocate ( taumode ( n_atoms * 3 ) )
+  allocate ( ammode ( n_atoms * 3 ) )   ! amplitude
+  allocate ( taumode ( n_atoms * 3 ) )   ! linewidth
   allocate ( result (ncorr, n_atoms * 3 ) )
 
   OPEN (unit = 66, file='corr_fit.vaf')
@@ -1614,8 +1506,7 @@ subroutine correlation_fit ( debug, ncorr, corr, n_win )
 
       omega_0 = two * pi * omega_phonon (i) * thertz   
       am_0 = corr (1,i) * million   
-      tau_0 = temperaturemd / dble (25.0) / thz_to_cm * thertz   
-!!! Note: temperaturemd is a parameter should be adjusted at different pressure         
+      tau_0 = temperaturemd / dble (25.0) / thz_to_cm * thertz           
       d_omega = three * pi * two / thz_to_cm  * thertz
 
       err1 = 10000000.0d0
@@ -1663,7 +1554,7 @@ subroutine correlation_fit ( debug, ncorr, corr, n_win )
       ammode (i) = am_0   
       taumode (i) = tau_0  
 
-      write (6,*) "omega_corr_fit ", i,omega_corr_fit (i)  
+      write (6,*) "omega_corr_fit ", i, omega_corr_fit (i)  
 
   end do
 
@@ -1692,13 +1583,13 @@ subroutine correlation_fit ( debug, ncorr, corr, n_win )
      write (66,11,advance='NO') k
      do i = 1, n_atoms *3
           write (66,13,advance='NO') result (k,i) / million /             &
-                       e_mass * 27.2114 /two / boltzmann_k / two
+                       e_mass * 27.2114d0 /two / boltzmann_k / two
      end do
      write (66,*)
   end do
 
 !
-! frouier transform of corr_fit
+! Frouier transformation of corr_fit
 !
 
  ! call corr_fit_fourier (debug)
@@ -1706,34 +1597,32 @@ subroutine correlation_fit ( debug, ncorr, corr, n_win )
 
 
   11  format (1x,i8,1x)
-  13  format (1x,f20.10,1x)
   12  format (1x,i8,1x,f20.10,1x)
+  13  format (1x,f20.10,1x)
 
   close (66)
   close (69)
 
-  deallocate (taumode)
-  deallocate (ammode)
-  deallocate (result)
+  deallocate ( result )
 
 end subroutine correlation_fit 
 !**************************************************************************
 subroutine corr_fourier ( debug, ncorr, corr, n_win ) 
 !**************************************************************************
 !
-!   Purpose: This subroutine performs Fourier transfrom of correlation function.  
+!   Purpose: This subroutine performs Fourier transfromation of correlation function.  
 ! 
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
@@ -1743,14 +1632,14 @@ subroutine corr_fourier ( debug, ncorr, corr, n_win )
 
   double precision, intent (IN) :: corr ( ncorr, n_atoms * 3)
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k, n
-  integer :: location, first, period
+  integer :: location, first, period, left, right
   integer,allocatable :: n_freq (:)
 
-  double precision :: theta, f_omega_max
+  double precision :: theta, f_omega_max, f_omega_half, d
   double precision, allocatable :: d_omega (:)
   double precision, allocatable :: window (:,:)  
   double precision, allocatable :: f_corr_module (:,:)
@@ -1758,38 +1647,47 @@ subroutine corr_fourier ( debug, ncorr, corr, n_win )
   complex ( kind = kind( 0.0d0 ) ) :: phase
   complex ( kind = kind( 0.0d0 ) ) :: f_corr
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
    OPEN(unit=64, file='corr_fourier.vaf')
+   ! OPEN(unit=65, file='tau_fourier.tau')
 
    allocate ( window (ncorr,n_atoms * 3) )
    allocate ( f_corr_module ( n_step, n_atoms * 3 ) )
    allocate ( n_freq ( n_atoms * 3 ) )
    allocate ( d_omega ( n_atoms * 3 ) )
+   allocate ( tau_fourier ( n_atoms * 3 ) )
 
 !
 ! window function
 !
+   ! window = zero
+   ! do k =1, n_atoms * 3
+   !    do i = 1, n_win (k)   
+   !       window (i,k) =                                                   &   
+   !          SIN( pi * dble (n_win (k) -i)/dble (2*n_win (k) -1) )**2
+   !    end do
+   ! end do
+
+!
+! rectangular window
+!
    window = zero
    do k =1, n_atoms * 3
       do i = 1, n_win (k)   
-         window (i,k) =                                                   &   
-            SIN( pi * dble (n_win (k) -i)/dble (2*n_win (k) -1) )**2
-
+         window (i,k) = one
       end do
    end do
 
-  window = one
-
 !
-! fourier transform
+! Fourier transformation
 !
 
    f_corr_module = zero 
    do k =1,  n_atoms * 3
 
-      write (6,*) k
+      write (6,*) "omega_corr", k
 
       d_omega (k) = two * pi / d_t / dble (n_win (k) ) / dble (20.0d0)
       n_freq (k) =  n_win (k) * three  
@@ -1798,9 +1696,7 @@ subroutine corr_fourier ( debug, ncorr, corr, n_win )
 
           f_corr = CMPLX (zero, zero)
 
-          do i = 1, n_win (k)   
-
-               window (i,k) = one   
+          do i = 1, n_win (k)     
 
                theta = d_omega (k) * DBLE (j) * dble (i) * d_t   
                phase = CMPLX ( COS( theta ), SIN ( theta ) )   
@@ -1826,12 +1722,36 @@ subroutine corr_fourier ( debug, ncorr, corr, n_win )
                 location = j   
            end if
       end do
+      
+      ! f_omega_half = half * f_omega_max
+
+      ! d = f_omega_max
+      ! do j =1, location
+      !     if ( abs (f_corr_module ( j,k ) - f_omega_half) < d ) then
+      !         d = abs (f_corr_module ( j,k ) - f_omega_half)
+      !         left = j
+      !     end if
+      ! end do
+
+      ! d = f_omega_max
+      ! do j =location+1, n_freq (k)
+      !     if ( abs (f_corr_module ( j,k ) - f_omega_half) < d ) then
+      !         d = abs (f_corr_module ( j,k ) - f_omega_half)
+      !         right = j
+      !     end if
+      ! end do
+            
+      ! tau_fourier ( k ) = d_omega (k) * DBLE (right - left) *             &
+      !                     thz_to_cm  /thertz/two/pi/atu
 
       omega_corr ( k ) = d_omega (k) * DBLE (location) *                  &   
                          thz_to_cm  /thertz/two/pi/atu
 
    end do
 
+   do i = 1, 3
+       omega_corr (i) = omega_phonon (i) * thz_to_cm   
+   end do
 
 !
 ! output
@@ -1842,46 +1762,51 @@ subroutine corr_fourier ( debug, ncorr, corr, n_win )
            write (64,12,advance='NO') d_omega (i) * DBLE (j) *            &   
                thz_to_cm  /thertz/two/pi/atu
            write (64,12,advance='NO') f_corr_module ( j,i ) /             &   
-                      e_mass**two * 27.2114**two /two**two /              &
+                      e_mass**two * 27.2114d0**two /two**two /              &
                       boltzmann_k**two / two**two
        end do
        write (64,*)
    end do
 
+  ! do i =1, n_atoms *3
+  !    write (65,13) i, tau_fourier(i)
+  ! end do
 
    11  format(1x,i6,1x)
    12  format(1x,f25.15,1x)
+   13  format(1x,i8,1x,f20.10,1x)
 
-   deallocate (window)
-   deallocate (f_corr_module)
-   deallocate (n_freq)
-   deallocate (d_omega)
+   deallocate ( window )
+   deallocate ( f_corr_module )
+   deallocate ( n_freq )
+   deallocate ( d_omega )
 
    close (64)
+   ! close (65)
 
 end subroutine corr_fourier
 !**************************************************************************
 subroutine corr_fit_fourier ( debug ) 
 !**************************************************************************
 !
-!   Purpose: This subroutine performs Fourier transfrom of correlation function.  
+!   Purpose: This subroutine performs Fourier transfromation of correlation function.  
 ! 
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
   
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k, n
@@ -1892,32 +1817,30 @@ subroutine corr_fit_fourier ( debug )
   double precision :: t, d_omega
   double precision, allocatable :: result (:,:)
   double precision, allocatable :: f_corr_module (:,:)
-  double precision, allocatable :: ammode (:)
-  double precision, allocatable :: taumode (:)
 
   complex ( kind = kind( 0.0d0 ) ) :: phase
   complex ( kind = kind( 0.0d0 ) ) :: f_corr
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
    OPEN(unit=74, file='corr_fit_fourier.vaf')
    ! OPEN(unit=75, file='corr_fit_all.vaf')
 
-   allocate (result (  n_step, n_atoms * 3 ) )
+   allocate ( result (  n_step, n_atoms * 3 ) )
    allocate ( f_corr_module ( n_step, n_atoms * 3 ) ) 
 
    do i = 1, n_atoms * 3
       do k =1, n_step 
          t = d_t * k * atu
          result (k,i) = ammode (i) *                                      &
-             COS( omega_corr_fit(i) / thz_to_cm * thertz * two * pi * t ) /  &
-             EXP ( taumode (i) * t ) / 1000000.d0
+            COS ( omega_corr_fit(i) / thz_to_cm * thertz * two*pi * t ) / &
+            EXP ( taumode (i) * t ) / 1000000.d0
       end do
    end do   
 
 !
-! fourier transform
+! Fourier transformation
 !
 
    f_corr_module = zero 
@@ -1956,11 +1879,11 @@ subroutine corr_fit_fourier ( debug )
 !
 
    do j =1, n_step
-       write(74,12,advance='NO') d_omega  * DBLE (j) *                 &   
+       write(74,12,advance='NO') d_omega  * DBLE (j) *                    &   
                                  thz_to_cm  /thertz/two/pi/atu
        do i = 1, n_atoms *3
            write (74,12,advance='NO') f_corr_module ( j,i ) /             &   
-                       e_mass**two * 27.2114**two /two**two /             &
+                       e_mass**two * 27.2114d0**two /two**two /             &
                        boltzmann_k**two / two**two
        end do
        write(74,*)
@@ -1970,7 +1893,7 @@ subroutine corr_fit_fourier ( debug )
    !   write (75,11,advance='NO') k   
    !   do i = 1, n_atoms *3
    !        write (75,12,advance='NO') result (k,i) /                       &   
-   !                     e_mass * 27.2114 /two / boltzmann_k / two
+   !                     e_mass * 27.2114d0 /two / boltzmann_k / two
    !   end do
    !   write (75,*)
    ! end do  
@@ -1979,8 +1902,8 @@ subroutine corr_fit_fourier ( debug )
    11  format(1x,i5,1x)
    12  format(1x,f25.15,1x)
 
-   deallocate (result)
-   deallocate (f_corr_module)
+   deallocate ( result )
+   deallocate ( f_corr_module )
 
    close (74)
    ! close (75)
@@ -1993,26 +1916,26 @@ subroutine maximum_entropy ( debug, velocity )
 !     Purpose:  maximum entropy method obtaining frequency via 
 !               Linear Prediction method. 
 !               It will also optionally perform a fitting of the maximum
-!               entropy spectrum to a lorentzian function.
+!               entropy spectrum to a Lorentzian function.
 ! 
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use parameter
    use quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
 
-  complex ( kind = kind( 0.0d0 ) ), intent (IN) :: velocity (n_step, n_atoms *3) 
+  complex (kind=kind(0.0d0)), intent (IN) :: velocity (n_step, n_atoms *3) 
  
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k, n 
@@ -2032,10 +1955,13 @@ subroutine maximum_entropy ( debug, velocity )
 !*************************************************************************
 !  Start of subroutine
 
-   allocate( d_entropy ( pole ))  
-   allocate( evlmem ( n_step, n_atoms * 3) )
-   allocate( data ( n_step ) )
-   allocate( evlmem_mode ( n_step ) ) 
+   ! OPEN(unit=67, file='tau_mem.tau')
+
+   allocate ( d_entropy ( pole ))  
+   allocate ( evlmem ( n_step, n_atoms * 3) )
+   allocate ( data ( n_step ) )
+   allocate ( evlmem_mode ( n_step ) ) 
+   allocate ( tau_mem ( n_atoms * 3 ) )
 
    d_omega_mem = two * pi / d_t / dble (n_step_use )/ 10.0d0
 
@@ -2072,10 +1998,12 @@ subroutine maximum_entropy ( debug, velocity )
   end do
 
 !
-! calculation frequency from evlmem
+! calculation of frequency from evlmem
 !
 
  do j = 1, n_atoms * 3
+
+     write (6,*) "omega_mem", j
 
      mem_max = zero
      
@@ -2089,21 +2017,45 @@ subroutine maximum_entropy ( debug, velocity )
 
      evlmem_mode =  evlmem (:,j)
 
-    ! call lorentzian ( debug, evlmem_mode, location_mem, d_omega_mem,     &
-                         ! lorentzian_max, half_width, p_con )
-
      omega_mem ( j ) = d_omega_mem * DBLE( location_mem )                 &
                          * thz_to_cm/thertz/two/pi/atu
 
-     ! omega_lorentzian ( j ) = d_omega_mem * DBLE( lorentzian_max )          &
-                         ! * thz_to_cm/thertz/two/pi/atu
+     ! call lorentzian ( debug, evlmem_mode, location_mem, d_omega_mem,     &
+     !                     lorentzian_max, half_width, p_con )
+
+     ! omega_lorentzian ( j ) = d_omega_mem * DBLE( lorentzian_max )        &
+     !                     * thz_to_cm/thertz/two/pi/atu
+
+     ! tau_mem ( j ) = d_omega_mem * DBLE( half_width )                     &
+     !                     * thz_to_cm/thertz/two/pi/atu
   
   end do
 
+  do i = 1, 3
+     omega_mem (i) = omega_phonon (i) * thz_to_cm   
+  end do
+
+  ! do i = 1, 3
+  !    omega_lorentzian (i) = omega_phonon (i) * thz_to_cm   
+  ! end do
+
+  ! do i =1, n_atoms *3
+  !    write (67,11) i, tau_mem(i) 
+  ! end do
+
+   11  format(1x,i8,1x,f20.10,1x)
+
+   deallocate ( d_entropy )  
+   deallocate ( evlmem )
+   deallocate ( data )
+   deallocate ( evlmem_mode ) 
+
+   ! close (67)
+
 end subroutine maximum_entropy 
-!**************************************************************************
+!***************************************************************************
 subroutine linear_response ( debug, data, m, xms, d ) 
-!**************************************************************************
+!***************************************************************************
 !
 !     Purpose:  Linear Prediction method
 !                            
@@ -2113,11 +2065,11 @@ subroutine linear_response ( debug, data, m, xms, d )
    use parameter
    use quantity
 
-!************************************************************************
+!***************************************************************************
 
   implicit none
 
-!*************************************************************************
+!***************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug 
@@ -2129,7 +2081,7 @@ subroutine linear_response ( debug, data, m, xms, d )
 
   complex ( kind = kind( 0.0d0 ) ), intent (IN) :: data (n_step)
 
-!*************************************************************************
+!***************************************************************************
 !  Local variables
   
   integer :: i, j, k, n 
@@ -2140,10 +2092,10 @@ subroutine linear_response ( debug, data, m, xms, d )
   complex ( kind = kind( 0.0d0 ) ), allocatable :: wk1(:)
   complex ( kind = kind( 0.0d0 ) ), allocatable :: wk2(:)
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
-  allocate( wkm ( m ) )     ! m = pole
+  allocate ( wkm ( m ) )     ! m = pole
   allocate ( wk1 (n_step) )
   allocate ( wk2 (n_step) )
 
@@ -2168,7 +2120,8 @@ subroutine linear_response ( debug, data, m, xms, d )
       denom = zero
       do j =1, n - k
           pneum = pneum + DBLE ( CONJG ( wk1 (j) ) * wk2 (j) )
-          denom = denom + DBLE ( CONJG ( wk1 (j) ) * wk1 (j) ) + DBLE ( CONJG ( wk2 (j) ) * wk2 (j) )
+          denom = denom + DBLE ( CONJG ( wk1 (j) ) * wk1 (j) ) +          &
+                          DBLE ( CONJG ( wk2 (j) ) * wk2 (j) )
       end do
       d ( k) = two * pneum / denom
       xms = xms * ( one - d (k) * d (k) )
@@ -2189,29 +2142,29 @@ subroutine linear_response ( debug, data, m, xms, d )
       end do
   end do
 
-  deallocate (wkm)
-  deallocate (wk1)
-  deallocate (wk2)
+  deallocate ( wkm )
+  deallocate ( wk1 )
+  deallocate ( wk2 )
 
 end subroutine linear_response 
 !**************************************************************************
 subroutine lorentzian ( debug, data, location, d_omega, max, width, p ) 
 !**************************************************************************
 !
-!     Purpose:  Fit the maximum entropy strepctrum to a lorentzian function, 
+!     Purpose:  Fit the maximum entropy strepctrum to a Lorentzian function, 
 !               output the maximum location and the half-height width.
 !                
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use parameter
    use quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
@@ -2220,11 +2173,11 @@ subroutine lorentzian ( debug, data, location, d_omega, max, width, p )
 
   double precision, intent (IN) :: data ( n_step )  ! input data 
   double precision, intent (IN) :: d_omega
-  double precision, intent (out) :: max 
+  double precision, intent (OUT) :: max 
   double precision, intent (OUT) :: width
   double precision, intent (OUT) :: p
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: a, b, c, i, j, k, n, m 
@@ -2234,15 +2187,15 @@ subroutine lorentzian ( debug, data, location, d_omega, max, width, p )
   double precision :: dk_1, dk_2, x, tau, err, err1, fit, d_x, d_tau
   double precision :: unit_k, p0, para, max0, d_p
   
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
   unit_k = one / ( d_omega *( thz_to_cm /thertz/two/pi/atu ) )
 
-  dk_1 = two * unit_k                                               ! ~ 1 cm^-1 
-  dk_2 = unit_k * 3.0d0                                             ! ~ 10 cm^-1
+  dk_1 = two * unit_k                                          ! ~ 1 cm^-1 
+  dk_2 = unit_k * 3.0d0                                        ! ~ 10 cm^-1
 
-  width0 = unit_k * 30.0d0                                          ! ~ 30 cm^-1
+  width0 = unit_k * 30.0d0                                     ! ~ 30 cm^-1
   xrange = floor ( unit_k * 150.0d0 ) 
 
 ! Location is an integer, labels that the maximum value of evnmm_mode (k) is at k = location. 
@@ -2285,8 +2238,8 @@ subroutine lorentzian ( debug, data, location, d_omega, max, width, p )
          if ( err < err1 )  then
              err1 = err
              max0 = x
-             width0 = tau             
-             p0 = para 
+             width0 = abs(tau)             
+             p0 = abs(para) 
          end if  
  
       end do
@@ -2304,23 +2257,23 @@ end subroutine lorentzian
 subroutine gamma_matrix ( debug ) 
 !**************************************************************************
 !
-!     Purpose:  This subroutine obtains the dynamics matrix from omega. 
+!     Purpose:  This subroutine obtains the force constant matrix from omega tilde. 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k, u
@@ -2330,17 +2283,17 @@ subroutine gamma_matrix ( debug )
   double precision, allocatable :: matrix_q ( :,: )
   double precision, allocatable :: omega_dynmat (:)
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
-  allocate( dynamics_matrix_q (n_atoms *3, n_atoms *3) )
-  allocate( diagonal_matrix_q (n_atoms *3, n_atoms *3) )
-  allocate( matrix_q (n_atoms *3, n_atoms *3)  )
+  allocate ( dynamics_matrix_q (n_atoms *3, n_atoms *3) )
+  allocate ( diagonal_matrix_q (n_atoms *3, n_atoms *3) )
+  allocate ( matrix_q (n_atoms *3, n_atoms *3)  )
   allocate ( omega_dynmat (n_atoms *3 ) )
 
   OPEN(unit=43, file='gamma_matrix.mat')
  
-  write (6,*) "gamma_matrix ..."
+  write (6,*) "Writing gamma_matrix"
 
   do i = 1, n_atoms * 3
        do j = 1, n_atoms * 3
@@ -2348,7 +2301,13 @@ subroutine gamma_matrix ( debug )
        end do
   end do
 
-  omega_dynmat  =  omega_corr_fit / thz_to_cm   
+  if ( method == 0 ) then
+     omega_dynmat  =  omega_corr_fit / thz_to_cm   ! fitting approach
+  else if ( method == 1 ) then
+     omega_dynmat  =  omega_corr / thz_to_cm       ! FT
+  else if ( method == 2 ) then
+     omega_dynmat  =  omega_mem / thz_to_cm        ! MEM
+  end if
 
   do i = 1, n_atoms * 3 
  
@@ -2412,35 +2371,35 @@ subroutine gamma_matrix ( debug )
   11 format(1x,i5,1x,i5,1x)
   12 format(1x,f15.10,2x,f15.10,2x,f15.10,1x)
 
-  deallocate (dynamics_matrix_q)
-  deallocate (diagonal_matrix_q)
-  deallocate (matrix_q)
-  deallocate (omega_dynmat)
+  deallocate ( dynamics_matrix_q )
+  deallocate ( diagonal_matrix_q )
+  deallocate ( matrix_q )
+  deallocate ( omega_dynmat )
 
 end subroutine gamma_matrix 
 !**************************************************************************
 subroutine gamma_force ( debug, dynamics_matrix_q ) 
 !**************************************************************************
 !
-!     Purpose:  This subroutine obtains the dynamics matrix from omega. 
+!     Purpose:  This subroutine obtains the interatomic anharmonic force. 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
   
   double precision, intent (IN) :: dynamics_matrix_q (n_atoms*3,n_atoms*3 )
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k, u
@@ -2449,13 +2408,13 @@ subroutine gamma_force ( debug, dynamics_matrix_q )
   double precision, allocatable :: displace ( :,: ) 
   double precision, allocatable :: force_h ( :,: )
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
   OPEN(unit=44, file='gamma_force.out')
 
-  allocate( displace (n_step, n_atoms *3) )
-  allocate( force_h (n_step, n_atoms *3) )
+  allocate ( displace (n_step, n_atoms *3) )
+  allocate ( force_h (n_step, n_atoms *3) )
 
   do k = 1, n_step_use
       do j =1, n_atoms
@@ -2503,32 +2462,32 @@ subroutine gamma_force ( debug, dynamics_matrix_q )
   
   close (44)
 
-  deallocate (displace)
-  deallocate (force_h)  
+  deallocate ( displace )
+  deallocate ( force_h )  
 
 end subroutine gamma_force 
 !**************************************************************************
 subroutine dynamics_matrix ( debug ) 
 !**************************************************************************
 !
-!     Purpose:  This subroutine builds up the dynamics matrix from omega. 
+!     Purpose:  This subroutine builds up the dynamical matrix from omega. 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k, n, u
@@ -2540,14 +2499,16 @@ subroutine dynamics_matrix ( debug )
   complex ( kind = kind( 0.0d0 ) ), allocatable :: matrix_q ( :,:,: )
   complex ( kind = kind( 0.0d0 ) ), allocatable :: vector_q_conjg (:,:,:)
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
-  allocate( dynamic_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
-  allocate( diagonal_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
-  allocate( matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
-  allocate( omega_dynmat (n_atom1 *3, super_size ) )
-  allocate( vector_q_conjg (n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( dynamic_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( diagonal_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( omega_dynmat (n_atom1 *3, super_size ) )
+  allocate ( vector_q_conjg (n_atom1 *3, n_atom1 *3, super_size ) )
+
+  write (6,*) "Writing dynamical_matrix"
 
   OPEN(unit=45, file='dynamical_matrix.mat')
 
@@ -2566,9 +2527,7 @@ subroutine dynamics_matrix ( debug )
            
            diagonal_matrix_q (i,i,j) =  CMPLX (                           &   
                  omega_dynmat (i,j) **two /                               &
-                 ( ryd/amu/adu/adu ) * ( thertz * two* pi )**2, zero      &
-                                              )
-
+                 ( ryd/amu/adu/adu ) * ( thertz * two* pi )**2, zero ) 
       end do
   end do
 
@@ -2576,9 +2535,8 @@ subroutine dynamics_matrix ( debug )
       do i = 1, n_atom1 * 3
           do j = 1, n_atom1 * 3
        
-               matrix_q ( i,j,k )  =  dot_product ( vector_q (i,:,k),    &   
-                              diagonal_matrix_q (:,j,k) )         
-                
+               matrix_q ( i,j,k )  =  dot_product ( vector_q (i,:,k),     &   
+                              diagonal_matrix_q (:,j,k) )                         
           end do
       end do
   end do 
@@ -2596,8 +2554,7 @@ subroutine dynamics_matrix ( debug )
           do j = 1, n_atom1 * 3
         
               dynamic_matrix_q ( i,j,k )  =                               &   
-                  dot_product ( matrix_q (i,:,k), vector_q_conjg (j,:,k) )          
-            
+                  dot_product ( matrix_q (i,:,k), vector_q_conjg (j,:,k) )             
           end do
       end do
   end do
@@ -2633,11 +2590,9 @@ subroutine dynamics_matrix ( debug )
          do u = 1, 3 
              do i = 1, n_atom1 
                  do j = 1, n_atom1 
-
                     dynamic_matrix_q ( 3*i -3 + k, 3*j-3 + u, n ) =       &   
                          dynamic_matrix_q ( 3*i -3 + k, 3*j-3 + u, n ) *  &
                          CMPLX ( sqrt( atom_mass(i) *atom_mass(j)), zero )
-
                  end do
              end do
          end do
@@ -2675,35 +2630,35 @@ subroutine dynamics_matrix ( debug )
   11 format(1x,i5,1x,i5,1x,i5,1x)
   12 format(1x,f12.8,1x,f12.8,1x,f12.8,1x,f12.8,1x,f12.8,1x,f12.8,1x)
 
-  deallocate (dynamic_matrix_q)
-  deallocate (diagonal_matrix_q)
-  deallocate (matrix_q)
-  deallocate (omega_dynmat)
-  deallocate (vector_q_conjg)
+  deallocate ( dynamic_matrix_q )
+  deallocate ( diagonal_matrix_q )
+  deallocate ( matrix_q )
+  deallocate ( omega_dynmat )
+  deallocate ( vector_q_conjg )
 
 end subroutine dynamics_matrix 
 !**************************************************************************
 subroutine dynamics_matrix_md ( debug ) 
 !**************************************************************************
 !
-!     Purpose:  This subroutine builds up the dynamics matrix from omega. 
+!     Purpose:  This subroutine builds up the dynamical matrix from omega tilde. 
 !                            
-!***************************************************************************
+!**************************************************************************
 !  used modules
   
    use  parameter
    use  quantity
 
-!************************************************************************
+!**************************************************************************
 
   implicit none
 
-!*************************************************************************
+!**************************************************************************
 !  Shared variables
 
   logical, intent (IN) :: debug
 
-!*************************************************************************
+!**************************************************************************
 !  Local variables
   
   integer :: i, j, k, n, u
@@ -2715,24 +2670,46 @@ subroutine dynamics_matrix_md ( debug )
   complex ( kind = kind( 0.0d0 ) ), allocatable :: matrix_q ( :,:,: )
   complex ( kind = kind( 0.0d0 ) ), allocatable :: vector_q_conjg (:,:,:)
 
-!*************************************************************************
+!**************************************************************************
 !  Start of subroutine
 
-  allocate( dynamic_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
-  allocate( diagonal_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
-  allocate( matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
-  allocate( omega_dynmat (n_atom1 *3, super_size ) )
-  allocate( vector_q_conjg (n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( dynamic_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( diagonal_matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( matrix_q ( n_atom1 *3, n_atom1 *3, super_size ) )
+  allocate ( omega_dynmat (n_atom1 *3, super_size ) )
+  allocate ( vector_q_conjg (n_atom1 *3, n_atom1 *3, super_size ) )
 
-  write (6,*) "dynamical_matrix_md..."
+  write (6,*) "Writing dynamical_matrix_md"
 
   OPEN(unit=46, file='dynamical_matrix_md.mat')
 
-  do j = 1, super_size  
-      do i = 1, n_atom1 *3
-
-           omega_dynmat (i,j) =  omega_corr_fit ( i + n_atom1 *3*(j-1) )/ &  
+  if ( method == 0 ) then 
+     do j = 1, super_size  
+        do i = 1, n_atom1 *3
+           omega_dynmat (i,j) =  omega_corr_fit ( i + n_atom1 *3*(j-1) )/ &   ! fitting approach
                                  thz_to_cm
+        end do
+     end do
+
+  else if ( method == 1 ) then
+     do j = 1, super_size  
+        do i = 1, n_atom1 *3
+           omega_dynmat (i,j) =  omega_corr ( i + n_atom1 *3*(j-1) ) /    &   ! FT
+                                 thz_to_cm
+        end do
+     end do
+
+  else if ( method == 2 ) then
+     do j = 1, super_size  
+        do i = 1, n_atom1 *3
+           omega_dynmat (i,j) =  omega_mem ( i + n_atom1 *3*(j-1) ) /     &   ! MEM
+                                 thz_to_cm
+        end do
+     end do
+  end if
+
+  do j = 1, super_size  
+     do i = 1, n_atom1 *3
 
            do k =1, n_atom1 *3
                diagonal_matrix_q (k,i,j) = CMPLX (zero, zero) 
@@ -2740,19 +2717,15 @@ subroutine dynamics_matrix_md ( debug )
            
            diagonal_matrix_q (i,i,j) =  CMPLX (                           &  
                  omega_dynmat (i,j) **two /                               &
-                 ( ryd/amu/adu/adu ) * ( thertz * two* pi )**2, zero      &
-                                              )
-
+                 ( ryd/amu/adu/adu ) * ( thertz * two* pi )**2, zero ) 
       end do
   end do
 
   do k = 1, super_size
       do i = 1, n_atom1 * 3
-          do j = 1, n_atom1 * 3
-       
+          do j = 1, n_atom1 * 3       
                matrix_q ( i,j,k )  =  dot_product ( vector_q (i,:,k),    &   
-                              diagonal_matrix_q (:,j,k) )         
-                
+                              diagonal_matrix_q (:,j,k) )                         
           end do
       end do
   end do 
@@ -2767,11 +2740,9 @@ subroutine dynamics_matrix_md ( debug )
 
   do k = 1, super_size
       do i = 1, n_atom1 * 3
-          do j = 1, n_atom1 * 3
-        
+          do j = 1, n_atom1 * 3        
               dynamic_matrix_q ( i,j,k )  =                               &   
-                  dot_product ( matrix_q (i,:,k), vector_q_conjg (j,:,k) )
-            
+                  dot_product ( matrix_q (i,:,k), vector_q_conjg (j,:,k) )            
           end do
       end do
   end do
@@ -2781,11 +2752,9 @@ subroutine dynamics_matrix_md ( debug )
          do u = 1, 3 
              do i = 1, n_atom1 
                  do j = 1, n_atom1 
-
                     dynamic_matrix_q ( 3*i -3 + k, 3*j-3 + u, n ) =       &  
                          dynamic_matrix_q ( 3*i -3 + k, 3*j-3 + u, n ) *  &
                          CMPLX ( sqrt( atom_mass(i) *atom_mass(j)), zero )
-
                  end do
              end do
          end do
@@ -2823,18 +2792,18 @@ subroutine dynamics_matrix_md ( debug )
   11 format(1x,i5,1x,i5,1x,i5,1x)
   12 format(1x,f12.8,1x,f12.8,1x,f12.8,1x,f12.8,1x,f12.8,1x,f12.8,1x)
 
-  deallocate (dynamic_matrix_q)
-  deallocate (diagonal_matrix_q)
-  deallocate (matrix_q)
-  deallocate (omega_dynmat)
-  deallocate (vector_q_conjg)
+  deallocate ( dynamic_matrix_q )
+  deallocate ( diagonal_matrix_q )
+  deallocate ( matrix_q )
+  deallocate ( omega_dynmat )
+  deallocate ( vector_q_conjg )
 
 end subroutine dynamics_matrix_md 
 !**************************************************************************
 subroutine write_dym ( debug, dynamics_matrix_q )
 !**************************************************************************
 !    
-!     Purpose:     This subroutine writes down the anharmonic / anharmonic 
+!     Purpose:     This subroutine writes down the effective harmonic
 !                  phonon information accrording to Quantum ESPRESSO ph.x 
 !                  output file format, so that they can be read in by q2r.x.
 !
@@ -2861,18 +2830,13 @@ subroutine write_dym ( debug, dynamics_matrix_q )
 
   character ( len = 80 ) :: line
   character ( len = 30 ), dimension ( 10 ) :: words
-  character ( len = 30 ), dimension ( 7 ), parameter ::                 &
+  character ( len = 30 ), dimension ( 2 ), parameter ::                   &
        command = (/                             &
-       'dynamical                    ',     & ! 1
-       'dielectric                   ',     & ! 2
-       'diagonalizing                ',     & ! 3
-       'q                            ',     & ! 4
-       'freq                         ',     & ! 5
-       'effective                    ',     & ! 6
-       'file                         '/)      ! 7
+       'dielectric                   ',     & ! 1
+       'diagonalizing                '/)      ! 2
   character ( len = 50 ) :: filename
   character ( len = 80 ) :: line2
-  character ( len = 3 ) :: tmp1
+  character ( len = 5 ) :: tmp
 
   integer :: i, j, k, n
   integer :: n_line  
@@ -2882,207 +2846,148 @@ subroutine write_dym ( debug, dynamics_matrix_q )
   integer :: n_stress
   integer :: status
   integer :: integer_numbers(10)
-  integer :: i_dynamical, i_q, i_omega, i_effective
+  integer :: i_q, i_omega
 
   double precision :: real_numbers(10)
   double precision :: real_1, real_2, real_3, image_1, image_2, image_3
+  double precision, allocatable :: omega_dynmat (:)
 
 !**************************************************************************
 !  Start of subroutine
 
-  if ( debug ) write(*,*) 'Entering read_input_mechanical()'
+  allocate ( omega_dynmat (n_atoms *3 ) )
 
-  write (6,*) "write dynamics matrix."
+  if ( method == 0 ) then
+     omega_dynmat  =  omega_corr_fit / thz_to_cm   ! fitting approach
+  else if ( method == 1 ) then
+     omega_dynmat  =  omega_corr / thz_to_cm       ! FT
+  else if ( method == 2 ) then
+     omega_dynmat  =  omega_mem / thz_to_cm        ! MEM
+  end if
 
-  n_line = 0
-  i_q = 1
-  i_omega = 0
-  i_effective = 0
 
+  open(unit = 50, file='dynmatmd0')
   rewind( unit = 21 )
  
-  do                                                                       
-     read(21, "(a80)", iostat = status ) line
-     if ( status < 0 ) exit
-        n_line = n_line + 1
-        if ( line(1:1) == '#' ) cycle
+  write (50,3) super(1), super(2), super(3)
+  write (50,4) super_size
+  do i =1, super_size
+       write (50,5)  q_point (i,:)
+  end do
+  close (50)
 
-     call split_line( line, n_words, words,                            &
-         n_integers, integer_numbers,                                   &
-         n_reals, real_numbers )
 
-     if (words(1) == command(1)) then
-          i_dynamical = i_dynamical + 1
+  do i_q = 1, super_size  
 
-          if ( words(3) == command(7) ) then
-               i_dynamical = 0
-               write (tmp1, "(i3)" ) i_q
-               write (filename,*) "dynmatmd",adjustl(tmp1)
-               OPEN (unit = 51, file=filename)
-               i_omega = 0
-               write (51,9)
-               do i=1, 6 + n_species + n_atom1
-                   read(21, "(a80)" ) line
-                   if ( status < 0 ) exit
-                   n_line = n_line + 1
-                   write (51,"(a80)") line
-               end do 
+      write (tmp, "(i5)" ) i_q
+      filename = "dynmatmd" // adjustl(tmp)
+      OPEN (unit = 51, file=filename)
+      write (51,9)
+      write (51,*)
+      write (51,17) n_species, n_atom1, lattice_parameter
+      write (51,18)
+      write (51,5) celldm(1,:) / dble (super(1))
+      write (51,5) celldm(2,:) / dble (super(2))
+      write (51,5) celldm(3,:) / dble (super(3))
+      do j=1, n_species
+         write (51,19) j, element(j), mass(j) * n_emass
+      end do
+      do i=1, n_atom1
+         write (51,20) i, int ( primitive_cell ( i,1 )),                   &
+                       primitive_position ( i,: )
+      end do 
+      write (51,*)
+      write (51,8)
+      write (51,*)
+      write (51,10) q_point(i_q,1), q_point(i_q,2), q_point(i_q,3)
+      write (51,*)
+      do i = 1, n_atom1
+        do j = 1, n_atom1
+          write (51,11)  i, j
+            do k = 1, 3    
+              write (51,12)                                                &
+                dynamics_matrix_q (3*i-3+k, 3*j-3+1, i_q ),                &   
+                dynamics_matrix_q (3*i-3+k, 3*j-3+2, i_q ),                &
+                dynamics_matrix_q (3*i-3+k, 3*j-3+3, i_q )  
+            end do
+        end do
+      end do
+      write (51,*)
 
-          else if ( i_dynamical == 1 ) then   
-               write (51,*)
-               write (51,8)
-               write (51,*)
-               read(21, "(a80)", iostat = status ) line
-               if ( status < 0 ) exit
-               n_line = n_line + 1
-               read(21, "(a80)", iostat = status ) line
-               if ( status < 0 ) exit
-               n_line = n_line + 1
-               call split_line( line, n_words, words,                     &
-                         n_integers, integer_numbers,                     &
-                         n_reals, real_numbers ) 
-               write (51,10) real_numbers (1), real_numbers (2),          &
-                             real_numbers (3) 
-               write (51,*)
-
-               do i = 1, n_atom1
-               do j = 1, n_atom1
-                   write (51,11)  i, j
-                   do k = 1, 3    
-                      write (51,12)                                     &
-                         dynamics_matrix_q (3*i-3+k, 3*j-3+1, i_q ), &   
-                         dynamics_matrix_q (3*i-3+k, 3*j-3+2, i_q ), &
-                         dynamics_matrix_q (3*i-3+k, 3*j-3+3, i_q )  
-                   end do
-                end do
-                end do
-
-          else if ( i_dynamical /= 1 ) then
-                read(21, "(a80)", iostat = status ) line
-                if ( status < 0 ) exit
-                n_line = n_line + 1
-                read(21, "(a80)", iostat = status ) line
-                if ( status < 0 ) exit
-                n_line = n_line + 1
-
-          end if
-
-    else if( words(1) == command(2) )   then 
-        write (51,*)
-        write (51,7)
-        do
+      if (i_q == 1) then
+         n_line = 0
+         do 
             read(21, "(a80)", iostat = status ) line
             if ( status < 0 ) exit
             n_line = n_line + 1
-
             line2 = line
-
             if ( line(1:1) == '#' ) cycle
-     
-            call split_line( line, n_words, words,                    &
-                 n_integers, integer_numbers,                         &
-                 n_reals, real_numbers )
-            
-            if (words(1) == command(3)) exit
-
-            if (words(1) == command(6)) then
-                i_effective  = i_effective + 1
-                if (i_effective ==1 ) then
-                    write(51,15)
-                else if  (i_effective ==2 ) then
-                    write(51,16)
-                end if
-            else
-                 write (51,"(a80)") line2
+            call split_line( line, n_words, words,                        &
+                             n_integers, integer_numbers,                 &
+                             n_reals, real_numbers )
+            if ( words(1) == command(1) ) then
+               write (51, "(a80)") line2
+               do
+                  read(21, "(a80)" ) line
+                  n_line = n_line + 1
+                  line2 = line
+                  call split_line( line, n_words, words,                  &
+                                   n_integers, integer_numbers,           &
+                                   n_reals, real_numbers )
+                  if ( words(1) == command(2) ) exit
+                  write (51, "(a80)") line2
+               end do
             end if
-        end do
-
-    else if( words(1) == command(4) )   then
-
-        i_q = i_q + 1
- 
-        write (51,*)
-        write (51,6)
-        write (51,*) 
-        call split_line( line, n_words, words,                     &
-                         n_integers, integer_numbers,                     &
-                         n_reals, real_numbers ) 
-        write(51,10) real_numbers (1), real_numbers (2), real_numbers (3)
-        write (51,*)
-        write (51,*)                                                      &
-  "*********************************************************************"
-
-    else if( words(1) == command(5) )   then
-
-         i_omega = i_omega + 1
-
-         write (51,13) integer_numbers (1),                                  &   
-                omega_corr_fit(i_omega + (i_q-2) * n_atom1 * 3) / thz_to_cm, &
-                omega_corr_fit(i_omega + (i_q-2) * n_atom1 * 3)
-
-         do i = 1, n_atom1
-
-             read(21, "(a80)", iostat = status ) line
-             if ( status < 0 ) exit
-             n_line = n_line + 1
-             if ( line(1:1) == '#' ) cycle
-             call split_line( line, n_words, words,                       &
-                   n_integers, integer_numbers,                           &
-                   n_reals, real_numbers )
-
-             real_1 = real_numbers (1)
-             image_1 = real_numbers (2)
-
-             read(21, "(a80)", iostat = status ) line
-             if ( status < 0 ) exit
-             n_line = n_line + 1
-             if ( line(1:1) == '#' ) cycle
-             call split_line( line, n_words, words,                       &
-                  n_integers, integer_numbers,                            &
-                  n_reals, real_numbers )
-
-             real_2 = real_numbers (1)
-             image_2 = real_numbers (2)
-
-             read(21, "(a80)", iostat = status ) line
-             if ( status < 0 ) exit
-             n_line = n_line + 1
-             if ( line(1:1) == '#' ) cycle
-             call split_line( line, n_words, words,                       &
-                   n_integers, integer_numbers,                           &
-                   n_reals, real_numbers )
-
-             real_3 = real_numbers (1)
-             image_3 = real_numbers (2)
-
-             write (51,14)  real_1, image_1, real_2, image_2,             &  
-                            real_3, image_3
-
-          end do
-            
-          if (i_omega == n_atom1 *3) then
-             write(51,*)                                                  &
- "***********************************************************************"
-             close (51)
-          end if
+         end do
       end if
 
-  end do
+      write (51,6)
+      write (51,*)
+      write (51,10) q_point(i_q,1), q_point(i_q,2), q_point(i_q,3)
+      write (51,*)
+      write (51,*)                                                        &
+    "*********************************************************************"
+      do i_omega = 1, n_atom1*3
+        write (51,13) i_omega,                                            &   
+             omega_dynmat(i_omega + (i_q-1) * n_atom1 * 3),               &
+             omega_dynmat(i_omega + (i_q-1) * n_atom1 * 3) * thz_to_cm
+        do i = 1, n_atom1
+          write (51,14)                                                   &
+            DBLE( temp_vector( 3*i-2, i_omega + (i_q-1) * n_atom1 * 3 ) ),&
+           AIMAG( temp_vector( 3*i-2, i_omega + (i_q-1) * n_atom1 * 3 ) ),&
+            DBLE( temp_vector( 3*i-1, i_omega + (i_q-1) * n_atom1 * 3 ) ),&
+           AIMAG( temp_vector( 3*i-1, i_omega + (i_q-1) * n_atom1 * 3 ) ),&
+            DBLE( temp_vector( 3*i,   i_omega + (i_q-1) * n_atom1 * 3 ) ),&
+           AIMAG( temp_vector( 3*i,   i_omega + (i_q-1) * n_atom1 * 3 ) )
+        end do
+      end do
+      write (51,*)                                                        &
+    "*********************************************************************"
 
- 6  format(5x,"Diagonalizing",1x,"the",1x,"dynamical",1x,"matrix")
- 7  format(5x,"Dielectric",1x,"Tensor:")
- 8  format(5x,"Dynamical",1x,"Matrix",1x,"in",1x,"cartesian",1x," axes")
- 9  format("Dynamical",1x,"matrix",1x,"file" )
- 10 format(5x,"q",1x,"= (",3f14.9,2x,")")
- 
- 11 format(i5,i5)
- 12 format(2f12.8,2x,2f12.8,2x,2f12.8)
- 
- 13 format(5x,"freq (",i2,") =",f15.6,1x,"[THz] =",f15.6,1x,"[cm-1]")
- 14 format(1x,"(",f10.6,f10.6,f10.6,f10.6,f10.6,f10.6,1x,")")
+ end do
 
- 15 format (5x,"Effective",1x,"Charges",1x,"E-U:",1x,"Z_{alpha}{s,beta}")
- 16 format (5x,"Effective",1x,"Charges",1x,"U-E:",1x,"Z_{s,alpha}{beta}")
+
+ 3  format (i4,i4,i4)
+ 4  format (i4)
+ 5  format (1x,F15.9,1x,F15.9,1x,F15.9,1x)
+ 6  format (5x,"Diagonalizing the dynamical matrix")
+ 7  format (5x,"Dielectric Tensor:")
+ 8  format (5x,"Dynamical Matrix in cartesian axes")
+ 9  format ("Dynamical matrix file" )
+ 10 format (5x,"q = (",3f14.9,2x,")") 
+ 11 format (i5,i5)
+ 12 format (2f12.8,2x,2f12.8,2x,2f12.8) 
+ 13 format (5x,"freq (   ",i2,") =",f15.6,1x,"[THz] =",f15.6,1x,"[cm-1]")
+ 14 format (1x,"(",f10.6,f10.6,f10.6,f10.6,f10.6,f10.6,1x,")")
+ 15 format (5x,"Effective Charges E-U: Z_{alpha}{s,beta}")
+ 16 format (5x,"Effective Charges U-E: Z_{s,alpha}{beta}")
+ 17 format (i3,1x,i4,2x,"0",1x,f12.9,2x,                                  &
+            "0.0000000  0.0000000  0.0000000  0.0000000  0.0000000")
+ 18 format ("Basis vectors")
+ 19 format (8x,i4,"  '",A3," ' ",f19.10)
+ 20 format (1x,i4,1x,i4,1x,f17.10,1x,f17.10,1x,f17.10)
+
+ deallocate ( omega_dynmat )
 
 end subroutine write_dym 
 !**************************************************************************
