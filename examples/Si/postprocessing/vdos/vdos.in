@@ -1,0 +1,8 @@
+ &input
+    asr = 'simple' ,
+    dos = .true. ,
+    nk1 = 20 , nk2 = 20 , nk3 = 20 ,
+    flfrc = 'fc' ,
+    flfrq = 'freq' ,
+    fldos = 'vdos' 
+ /
