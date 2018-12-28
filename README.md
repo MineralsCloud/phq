@@ -17,9 +17,7 @@ The phq executable file is compiled.
 The source codes work as following:
 
 1. `configure.f90` contains 3 auxiliary modules, which configure the physical quantities, parameters and text readin settings.
-
 2. `main.f90` the main module, which performs the normal mode projection and anharmonic phonon extraction and so forth.
-
 3. `phq.f90`  runs the program and records the running time.
 
 ## Input Files
@@ -28,19 +26,19 @@ There are 4 input files needed, which can be prepared according to the example p
 
 1. `input` general controlling and settings. Parameters:
 
-    `dt` MD time step in atomic unit.  `step_md_use` number of MD steps needed for the calculation of mode-projected VAFs. `correlation_time` desired decay time for VAFs in unit of `dt` which should be less than the `step_md_use`. `pole` parameter used in the maximum entropy method to filter high frequency components which should be less than the ``step_md_use``. `supercell` size of the supercell. `temperature` MD simulation temperature. `method` choose renormalized frequencies by which method when building the effective harmonic dynamical matrices: 0 represents the fitting approach. 1 represents the FT.  2 represents the MEM.
+   `dt` MD time step in atomic unit.  `step_md_use` number of MD steps needed for the calculation of mode-projected VAFs. `correlation_time` desired decay time for VAFs in unit of `dt` which should be less than the `step_md_use`. `pole` parameter used in the maximum entropy method to filter high frequency components which should be less than the ``step_md_use``. `supercell` size of the supercell. `temperature` MD simulation temperature. `method` choose renormalized frequencies by which method when building the effective harmonic dynamical matrices: 0 represents the fitting approach. 1 represents the FT.  2 represents the MEM.
 
 2. `scf.out` structure information of the primitive cell from self-consistent calculation. Parameters:
 
-   `ntype` number of elements.  `natom` number of atoms. `mass` mass of each element following the symbol of the element. `lattice_parameter` scale of lattice vectors in unit of Bohr radius. `cell_parameters` lattice vectors in cardesian cooradinates in unit of `lattice_parameter`. `atomic_positions` atomic positions of atoms in reduced coordinates following the symbol of element.
+   `ntype` number of elements.  `natom` number of atoms. `mass` atomic mass of each element following the symbol of the element. `lattice_parameter` scale of lattice vectors in unit of Bohr radius. `cell_parameters` lattice vectors in cartesian cooradinates in unit of `lattice_parameter`. `atomic_positions` atomic positions of atoms in reduced coordinates following the symbol of element.
 
 3. `dyn.out` harmonic phonon results from Quantum ESPRESSO ph.x output. Parameters:
 
-    `q` **q**-point in cartesian coordinates in unit of 2$\pi$/`lattice_parameter`.They are required as program input. `freq` harmonic phonon frequencies. They are required as program input as well as the following six columns of eigenvectors. Eigenvector of each atom has x, y and z components and each component has a real part and an imaginary part. The order of atoms should be the same as that of the atoms entered in `atomic_positions` in `scf.out`. `Dynamical Matrix` dynamical matrices, which are not required as program input if other program is used. `Dielectric Tensor` whether this is needed depends on whether LO-TO splitting needs to be considered in the system. `Effective Charges` whether they are needed depends on whether LO-TO splitting needs to be considered in the system.  
+   `q` **q**-point in cartesian coordinates in unit of 2$\pi$/`lattice_parameter`.They are required as program input. `freq` harmonic phonon frequencies. They are required as program input as well as the following six columns of eigenvectors. Eigenvector of each atom has x, y and z components and each component has a real part and an imaginary part. The order of atoms should be the same as that of the atoms entered in `atomic_positions` in `scf.out`. `Dynamical Matrix` dynamical matrices, which are not required as program input if other program is used. `Dielectric Tensor` whether this is needed depends on whether LO-TO splitting needs to be considered in the system. `Effective Charges` whether they are needed depends on whether LO-TO splitting needs to be considered in the system.  
 
 4. `md.out` MD information. Parameters:
 
-   `total_step` total actual MD steps. In practice, recorded MD steps should be configurations after reaching thermal equilibrium and less than this number.`atomic_positions` initial atomic positions in reduced coordinates of the supercell lattice vectors. `md_step` recorded MD steps, followed by the instantaneous `atomic_md_positions` in the MD simulation. `atomic_md_positions` atomic positions in the MD simulation in reduced coordinates of the supercell lattice vectors. Atoms in each one of the primitive cell should be together instead of atoms of equivalent positions being together and the order of atoms in each of the primitive cell should be in the same order as provided in `scf.out`.
+   `total_step` total actual MD steps. In practice, recorded MD steps should be configurations after reaching thermal equilibrium and less than this number.`atomic_positions` initial atomic positions in reduced coordinates of the supercell lattice vectors. `md_step` recorded MD steps, followed by the instantaneous `atomic_md_positions` in the MD simulation. `atomic_md_positions` atomic positions in the MD simulation in reduced coordinates of the supercell lattice vectors. Atoms in each one of the primitive cell should be together instead of atoms of same element being together, and the order of atoms in each of the primitive cell should be in the same order as provided in `scf.out`.
 
 ## Executing the Program
 
