@@ -1368,7 +1368,7 @@ subroutine correlation ( debug, a, na, ncorr )
    end do
 
 !
-!  correlation decay to 0.5 in amplitude. 
+!  correlation decay to 0.75 in amplitude !!!
 !
  
    do k = 1, n_atoms * 3
@@ -1380,7 +1380,7 @@ subroutine correlation ( debug, a, na, ncorr )
            if ( corr (i,k ) < corr ( i-1,k ) ) then 
                first = first + 1   
                if (first == 1) then
-                   if (max < max_0 * 0.5d0 ) then   
+                   if (max < max_0 * 0.75d0 ) then   !!! modify here
                        n_win_mode (k) = i   
                        exit
                    end if
@@ -1938,10 +1938,10 @@ subroutine maximum_entropy ( debug, velocity )
 !**************************************************************************
 !  Local variables
   
-  integer :: i, j, k, n 
+  integer :: i, j, k, n, left, right
   integer :: n_freq_mem, location_mem
 
-  double precision :: d_omega_mem, mem_max
+  double precision :: d_omega_mem, mem_max, mem_max_half, d
   double precision :: theta
   double precision :: xms
   double precision :: wpr, wpi, wr, wi, sumr, sumi, wtemp
@@ -1968,6 +1968,8 @@ subroutine maximum_entropy ( debug, velocity )
    n_freq_mem = floor ( dble (n_step_use) / dble (2) )
 
    do j = 1, n_atoms * 3          ! for each mode
+
+      write (6,*) "omega_mem", j
 
       data = velocity (:,j)
 
@@ -2003,8 +2005,6 @@ subroutine maximum_entropy ( debug, velocity )
 
  do j = 1, n_atoms * 3
 
-     write (6,*) "omega_mem", j
-
      mem_max = zero
      
      do k = 1, n_freq_mem
@@ -2020,15 +2020,35 @@ subroutine maximum_entropy ( debug, velocity )
      omega_mem ( j ) = d_omega_mem * DBLE( location_mem )                 &
                          * thz_to_cm/thertz/two/pi/atu
 
+     !  mem_max_half = half * mem_max
+
+     !  d = mem_max
+     !  do k =1, location_mem
+     !      if ( abs (evlmem (k,j) - mem_max_half) < d ) then
+     !          d = abs (evlmem (k,j) - mem_max_half)
+     !          left = k
+     !      end if
+     !  end do
+
+     !  d = mem_max
+     !  do k =location_mem+1, n_freq_mem
+     !      if ( abs (evlmem (k,j) - mem_max_half) < d ) then
+     !          d = abs (evlmem (k,j) - mem_max_half)
+     !          right = k
+     !      end if
+     !  end do
+            
+     ! tau_mem ( j ) = d_omega_mem * DBLE( right - left )                     &
+     !                     * thz_to_cm/thertz/two/pi/atu
+
+
      ! call lorentzian ( debug, evlmem_mode, location_mem, d_omega_mem,     &
      !                     lorentzian_max, half_width, p_con )
 
      ! omega_lorentzian ( j ) = d_omega_mem * DBLE( lorentzian_max )        &
      !                     * thz_to_cm/thertz/two/pi/atu
 
-     ! tau_mem ( j ) = d_omega_mem * DBLE( half_width )                     &
-     !                     * thz_to_cm/thertz/two/pi/atu
-  
+
   end do
 
   do i = 1, 3
