@@ -2907,7 +2907,15 @@ subroutine write_dym ( debug, dynamics_matrix_q )
       end do
       do i=1, n_atom1
          write (51,20) i, int ( primitive_cell ( i,1 )),                   &
-                       primitive_position ( i,: )
+              primitive_position ( i,1 ) * celldm(1,1) / dble (super(1)) + &
+              primitive_position ( i,2 ) * celldm(2,1) / dble (super(2)) + &
+              primitive_position ( i,3 ) * celldm(3,1) / dble (super(3)),  &
+              primitive_position ( i,1 ) * celldm(1,2) / dble (super(1)) + &
+              primitive_position ( i,2 ) * celldm(2,2) / dble (super(2)) + &
+              primitive_position ( i,3 ) * celldm(3,2) / dble (super(3)),  &
+              primitive_position ( i,1 ) * celldm(1,3) / dble (super(1)) + &
+              primitive_position ( i,2 ) * celldm(2,3) / dble (super(2)) + &
+              primitive_position ( i,3 ) * celldm(3,3) / dble (super(3))
       end do 
       write (51,*)
       write (51,8)
